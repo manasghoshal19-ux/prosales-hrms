@@ -80,12 +80,24 @@ footer{text-align:center;padding:25px;color:#718096;font-size:12px}
 </div>
 </div>
 
+
 <div id="employees" class="section">
-<div class="card">
-<h2>Employee Management</h2>
-<p class="muted">HR-only module. Employee records will be available after database permissions and integration are verified.</p>
+  <div class="card">
+    <h2>Employee Management</h2>
+    <p class="muted">HR Employee Directory</p>
+    <button type="button" onclick="loadEmployees()">
+      Refresh Employee List
+    </button>
+    <p id="employeeStatus"></p>
+    <div id="employeeList"></div>
+  </div>
 </div>
-</div>
+ 
+
+
+
+
+
 
 <div id="attendance" class="section">
 <div class="card">
@@ -280,6 +292,39 @@ async function restoreSession(){
   message(err.message||"Unable to restore session.");
  }
 }
+async function loadEmployees() {
+  const status = document.getElementById("employeeStatus");
+  const list = document.getElementById("employeeList");
+  list.replaceChildren();
+
+  if (!currentUser || currentRole !== "hr") {
+    status.textContent = "HR access required.";
+    return;
+  }
+
+  status.textContent = "Loading employees...";
+
+  try {
+    const client = getClient();
+    const { data, error } = await client
+      .from("employees")
+      .select("*")
+      .order("employee_code");
+
+    if (error) throw error;
+
+    status.textContent = `${data.length} employee(s) found`;
+
+    data.forEach(emp => {
+      const item = document.createElement("p");
+      item.textContent = JSON.stringify(emp);
+      list.appendChild(item);
+    });
+  } catch (err) {
+    status.textContent = err.message;
+  }
+                            }
+ 
 restoreSession();
 </script>
 </body>
