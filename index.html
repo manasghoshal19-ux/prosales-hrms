@@ -94,7 +94,9 @@ footer{text-align:center;padding:25px;color:#718096;font-size:12px}
 </div>
  
 
-<div class="card">
+
+<div id="addEmployeeCard" class="card hidden">
+  
   <h2>Add New Employee</h2>
   <form id="addEmployeeForm">
     <label>Employee ID</label>
@@ -261,6 +263,9 @@ async function loadUser(user){
  currentUser=user;
  currentRole=data.role==="hr"?"hr":"employee";
 
+document.getElementById("addEmployeeCard")
+  .classList.toggle("hidden", currentRole !== "hr");
+  
  document.getElementById("loginPage").classList.add("hidden");
  document.getElementById("appPage").classList.remove("hidden");
  document.getElementById("welcome").textContent=
