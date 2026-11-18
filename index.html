@@ -166,7 +166,10 @@ footer{text-align:center;padding:25px;color:#718096;font-size:12px}
 <div id="salary" class="section">
 <div class="card">
 <h2>Salary & Payslips</h2>
-<p class="muted">Your authorised salary records and payslips will appear here after secure integration.</p>
+
+<p><b>Gross Salary:</b> <span id="salarySectionValue">Loading...</span></p>
+<p><b>Date of Joining:</b> <span id="joiningSectionValue">Loading...</span></p>
+  
 </div>
 </div>
 
@@ -251,7 +254,9 @@ async function loadUser(user){
  // HR access requires a verified role in the database.
  const {data,error}=await client
   .from("employees")
-  .select("employee_code,full_name,role")
+  
+.select("employee_code,full_name,role,designation,department,date_of_joining,gross_salary")
+   
   .eq("id",user.id)
   .single();
 
@@ -277,6 +282,18 @@ document.getElementById("addEmployeeCard")
  document.getElementById("profileValue").textContent=
   data.employee_code||"Employee";
 
+const salary = data.gross_salary == null
+  ? "Not available"
+  : "₹" + Number(data.gross_salary).toLocaleString("en-IN");
+
+const joining = data.date_of_joining
+  ? new Date(data.date_of_joining + "T00:00:00")
+      .toLocaleDateString("en-GB")
+  : "Not available";
+
+document.getElementById("salarySectionValue").textContent = salary;
+document.getElementById("joiningSectionValue").textContent = joining;
+  
  const modules=[
   ["overview","Dashboard"],
   ["attendance","Attendance"],
