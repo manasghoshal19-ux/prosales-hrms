@@ -94,6 +94,42 @@ footer{text-align:center;padding:25px;color:#718096;font-size:12px}
 </div>
  
 
+<div class="card">
+  <h2>Add New Employee</h2>
+  <form id="addEmployeeForm">
+    <label>Employee ID</label>
+    <input id="newEmpId" required>
+
+    <label>Full Name</label>
+    <input id="newEmpName" required>
+
+    <label>Mobile Number</label>
+    <input id="newEmpMobile" type="tel">
+
+    <label>Email</label>
+    <input id="newEmpEmail" type="email">
+
+    <label>Department</label>
+    <input id="newEmpDepartment">
+
+    <label>Designation</label>
+    <input id="newEmpDesignation">
+
+    <label>Joining Date</label>
+    <input id="newEmpJoining" type="date">
+
+    <label>Monthly Salary</label>
+    <input id="newEmpSalary" type="number">
+
+    <button type="button" disabled>
+      Save Employee
+    </button>
+  </form>
+  <p class="muted small">
+    Saving will be enabled after secure database setup.
+  </p>
+</div>
+  
 
 
 
