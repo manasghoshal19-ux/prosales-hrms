@@ -473,6 +473,21 @@ async function submitLeave(){
 }
 
 
+async function decideHrLeave(id,decision,actions){
+ if(!currentUser||currentRole!=="hr"||!["approved","rejected"].includes(decision))return;
+ if(!confirm("Confirm "+decision+" for this leave request?"))return;
+ const buttons=actions.querySelectorAll("button");
+ buttons.forEach(b=>b.disabled=true);
+ try{
+  const {data,error}=await getClient().from("leave_requests").update({status:decision}).eq("id",id).eq("status","pending").select("id,status");
+  if(error)throw error;
+  if(!data||data.length!==1)throw new Error("Request was not updated. Check permissions or current status.");
+  await loadHrLeaveRequests();
+ }catch(e){
+  document.getElementById("hrLeaveStatus").textContent="Decision failed: "+e.message;
+  buttons.forEach(b=>b.disabled=false);
+ }
+}
 async function loadHrLeaveRequests(){
  const status=document.getElementById("hrLeaveStatus"),list=document.getElementById("hrLeaveList");
  list.replaceChildren();
@@ -482,7 +497,7 @@ async function loadHrLeaveRequests(){
   const {data,error}=await getClient().from("leave_requests").select("*").order("created_at",{ascending:false}).limit(100);
   if(error)throw error;
   const rows=data||[];
-  status.textContent=rows.length+" leave request(s) found. Read-only until approval permissions are verified.";
+  status.textContent=rows.length+" leave request(s) found.";
   if(!rows.length)return;
   const ids=[...new Set(rows.map(x=>x.employee_id).filter(Boolean))];
   let people=new Map();
@@ -496,6 +511,16 @@ async function loadHrLeaveRequests(){
    const person=people.get(req.employee_id);
    const entries=[["Employee Name",person?.full_name||"Name unavailable"],["Employee ID",person?.employee_code||req.employee_id],["Dates",(req.start_date||"")+" to "+(req.end_date||"")],["Status",req.status],["Reason",req.reason],["Submitted",req.created_at?new Date(req.created_at).toLocaleString("en-IN",{timeZone:"Asia/Kolkata"}):""]];
    entries.forEach(([name,value])=>{const p=document.createElement("p");const strong=document.createElement("strong");strong.textContent=name+": ";p.appendChild(strong);p.appendChild(document.createTextNode(String(value??"—")));item.appendChild(p);});
+   if(req.status==="pending"){
+    const actions=document.createElement("div");actions.style.display="flex";actions.style.gap="8px";actions.style.flexWrap="wrap";
+    for(const [label,decision] of [["Approve","approved"],["Reject","rejected"]]){
+     const btn=document.createElement("button");btn.type="button";btn.textContent=label;
+     if(decision==="rejected")btn.className="secondary";
+     btn.onclick=()=>decideHrLeave(req.id,decision,actions);
+     actions.appendChild(btn);
+    }
+    item.appendChild(actions);
+   }
    list.appendChild(item);
   });
  }catch(e){status.textContent="Unable to load leave requests: "+e.message;}
