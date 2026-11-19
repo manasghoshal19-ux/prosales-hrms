@@ -204,6 +204,7 @@ nav button{font-size:13px}
 <div class="card">
 <h2>HR Approval Centre</h2>
 <p class="muted">HR-only leave request overview. Approve/Reject actions will be enabled after server-side authorization is verified.</p><button type="button" onclick="loadHrLeaveRequests()">Refresh Leave Requests</button><p id="hrLeaveStatus" class="small muted"></p><div id="hrLeaveList"></div>
+<h3>Late Entry / Half-Day Approvals</h3><button type="button" onclick="loadHrAttendanceRequests()">Refresh Attendance Requests</button><p id="hrAttendanceStatus" class="small muted"></p><div id="hrAttendanceList"></div>
 </div>
 </div>
 </section>
@@ -334,7 +335,7 @@ document.getElementById("joiningSectionValue").textContent = joining;
   document.getElementById("navigation").appendChild(button);
  });
  showSection("overview");
- if(currentRole==="hr")loadHrLeaveRequests();
+ if(currentRole==="hr"){loadHrLeaveRequests();loadHrAttendanceRequests();}
  document.getElementById("attendanceRequestDate").value=istDate();
  loadMyLeaves();
  loadMyAttendance();
@@ -605,6 +606,67 @@ async function loadHrLeaveRequests(){
    list.appendChild(item);
   });
  }catch(e){status.textContent="Unable to load leave requests: "+e.message;}
+}
+
+
+async function decideHrAttendanceRequest(id,decision,actions){
+ if(!currentUser||currentRole!=="hr"||!["approved","rejected"].includes(decision))return;
+ if(!confirm("Confirm "+decision+" for this attendance request?"))return;
+ const buttons=actions.querySelectorAll("button");buttons.forEach(b=>b.disabled=true);
+ try{
+  const {data,error}=await getClient().from("attendance_requests")
+   .update({status:decision,reviewed_by:currentUser.id,reviewed_at:new Date().toISOString()})
+   .eq("id",id).eq("status","pending").select("id,status");
+  if(error)throw error;
+  if(!data||data.length!==1)throw new Error("Request not updated. Check permissions and status.");
+  await loadHrAttendanceRequests();
+ }catch(e){document.getElementById("hrAttendanceStatus").textContent="Decision failed: "+e.message;buttons.forEach(b=>b.disabled=false);}
+}
+async function loadHrAttendanceRequests(){
+ const status=document.getElementById("hrAttendanceStatus"),list=document.getElementById("hrAttendanceList");
+ list.replaceChildren();
+ if(!currentUser||currentRole!=="hr"){status.textContent="HR access required.";return;}
+ status.textContent="Loading attendance requests…";
+ try{
+  const {data,error}=await getClient().from("attendance_requests")
+   .select("id,employee_id,request_date,requested_status,reason,status,created_at")
+   .order("created_at",{ascending:false}).limit(100);
+  if(error)throw error;
+  const rows=data||[];status.textContent=rows.length+" attendance request(s) found.";
+  const ids=[...new Set(rows.map(x=>x.employee_id).filter(Boolean))];
+  let people=new Map();
+  if(ids.length){
+   const {data:emps,error:empError}=await getClient().from("employees")
+    .select("id,full_name,employee_code").in("id",ids);
+   if(empError)status.textContent+=" Names unavailable: "+empError.message;
+   else people=new Map((emps||[]).map(e=>[e.id,e]));
+  }
+  rows.forEach(req=>{
+   const item=document.createElement("div");item.className="request-row";
+   const person=people.get(req.employee_id);
+   const fields=[
+    ["Employee",person?.full_name||"Name unavailable"],
+    ["Employee ID",person?.employee_code||req.employee_id],
+    ["Type",req.requested_status==="half_day"?"Half-Day":req.requested_status==="late"?"Late Entry":req.requested_status],
+    ["Date",req.request_date],["Status",req.status],["Reason",req.reason]
+   ];
+   fields.forEach(([label,value])=>{
+    const p=document.createElement("p"),strong=document.createElement("strong");
+    strong.textContent=label+": ";p.append(strong,document.createTextNode(String(value??"—")));item.appendChild(p);
+   });
+   if(req.status==="pending"){
+    const actions=document.createElement("div");
+    for(const [label,decision] of [["Approve","approved"],["Reject","rejected"]]){
+     const btn=document.createElement("button");btn.type="button";btn.textContent=label;
+     if(decision==="rejected")btn.className="secondary";
+     btn.onclick=()=>decideHrAttendanceRequest(req.id,decision,actions);
+     actions.appendChild(btn);
+    }
+    item.appendChild(actions);
+   }
+   list.appendChild(item);
+  });
+ }catch(e){status.textContent="Unable to load attendance requests: "+e.message;}
 }
 
 restoreSession();
