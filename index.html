@@ -190,7 +190,7 @@ footer{text-align:center;padding:25px;color:#718096;font-size:12px}
 <div id="approvals" class="section">
 <div class="card">
 <h2>HR Approval Centre</h2>
-<p class="muted">Pending leave and remote-attendance approvals will appear here after backend integration.</p>
+<p class="muted">HR-only leave request overview. Approve/Reject actions will be enabled after server-side authorization is verified.</p><button type="button" onclick="loadHrLeaveRequests()">Refresh Leave Requests</button><p id="hrLeaveStatus" class="small muted"></p><div id="hrLeaveList"></div>
 </div>
 </div>
 </section>
@@ -317,6 +317,7 @@ document.getElementById("joiningSectionValue").textContent = joining;
   document.getElementById("navigation").appendChild(button);
  });
  showSection("overview");
+ if(currentRole==="hr")loadHrLeaveRequests();
  loadMyLeaves();
  loadMyAttendance();
 }
@@ -467,6 +468,27 @@ async function submitLeave(){
   await loadMyLeaves();
  }catch(e){msg.textContent="Request not submitted: "+e.message;}
  finally{btn.disabled=false;}
+}
+
+
+async function loadHrLeaveRequests(){
+ const status=document.getElementById("hrLeaveStatus"),list=document.getElementById("hrLeaveList");
+ list.replaceChildren();
+ if(!currentUser||currentRole!=="hr"){status.textContent="HR access required.";return;}
+ status.textContent="Loading leave requests…";
+ try{
+  const {data,error}=await getClient().from("leave_requests").select("*").order("created_at",{ascending:false}).limit(100);
+  if(error)throw error;
+  const rows=data||[];
+  status.textContent=rows.length+" leave request(s) found. Read-only until approval permissions are verified.";
+  if(!rows.length)return;
+  rows.forEach(req=>{
+   const item=document.createElement("div");item.className="tile";item.style.marginBottom="10px";
+   const entries=[["Employee",req.employee_id],["Dates",(req.start_date||"")+" to "+(req.end_date||"")],["Status",req.status],["Reason",req.reason],["Submitted",req.created_at?new Date(req.created_at).toLocaleString("en-IN",{timeZone:"Asia/Kolkata"}):""]];
+   entries.forEach(([name,value])=>{const p=document.createElement("p");const strong=document.createElement("strong");strong.textContent=name+": ";p.appendChild(strong);p.appendChild(document.createTextNode(String(value??"—")));item.appendChild(p);});
+   list.appendChild(item);
+  });
+ }catch(e){status.textContent="Unable to load leave requests: "+e.message;}
 }
 
 restoreSession();
