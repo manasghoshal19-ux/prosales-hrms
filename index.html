@@ -471,7 +471,7 @@ async function submitAttendanceRequest(){
  btn.disabled=true;msg.textContent="Submitting request…";
  try{
   const {error}=await getClient().from("attendance_requests").insert({
-   employee_id:currentUser.id,request_type:type,request_date:date,reason,status:"pending"
+   employee_id:currentUser.id,requested_status:type,request_date:date,reason,status:"pending"
   });
   if(error)throw error;
   msg.textContent="Request submitted. HR decision will appear in My Requests & Status.";
