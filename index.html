@@ -73,7 +73,7 @@ footer{text-align:center;padding:25px;color:#718096;font-size:12px}
 <h2>Dashboard Overview</h2>
 <div class="grid">
 <div class="tile">My Profile<strong id="profileValue">—</strong></div>
-<div class="tile">Attendance<strong>Not configured</strong></div>
+<div class="tile">Attendance<strong id="attendanceSummary">Not recorded</strong></div>
 <div class="tile">Leave Balance<strong>Not configured</strong></div>
 <div class="tile">Salary<strong>Restricted</strong></div>
 </div>
@@ -141,11 +141,11 @@ footer{text-align:center;padding:25px;color:#718096;font-size:12px}
 <div class="card">
 <h2>Attendance Management</h2>
 <p><b>Office:</b> 1/12, EP Block, Sector V, Bidhannagar, Kolkata 700091</p>
-<p><b>Check-in window:</b> 10:45 AM – 11:00 AM IST</p>
-<p><b>Office radius:</b> 100 metres</p>
-<button disabled>Office Check-In</button>
+<p><b>Check-in:</b> 10:45–10:59 AM on time; 11:00–11:59 AM late; from 12:00 PM half day.</p><p><b>Check-out window:</b> 6:15–6:30 PM IST</p>
+<p><b>Office radius:</b> 50 metres</p><button class="secondary" type="button" onclick="checkGps()">Check My GPS Location</button><p id="gpsStatus" class="small muted" aria-live="polite"></p><p id="attendanceHistory" class="small muted"></p>
+<button disabled title="Server-side attendance recording is not ready">Office Check-In</button>
 <button class="secondary" disabled>Request Remote Attendance</button>
-<p class="muted small">Attendance is disabled until secure GPS and server-side validation are implemented. No attendance is recorded yet.</p>
+<p class="muted small">Check-in and check-out remain disabled until authenticated server-side recording is verified. GPS check is informational only.</p>
 </div>
 </div>
 
@@ -158,8 +158,8 @@ footer{text-align:center;padding:25px;color:#718096;font-size:12px}
 <input type="date" id="leaveEnd">
 <label>Reason</label>
 <textarea id="leaveReason" placeholder="Reason for leave"></textarea>
-<button disabled>Submit Leave Request</button>
-<p class="muted small">Leave submission will be enabled after the database workflow is configured.</p>
+<button type="button" onclick="submitLeave()" id="submitLeaveButton">Submit Leave Request</button><p id="leaveMessage" class="small" aria-live="polite"></p><h3>My Leave Requests</h3><div id="leaveHistory" class="small muted">Sign in to view requests.</div>
+<p class="muted small">Requests are sent for HR review. Approval and automatic leave marking are not yet active.</p>
 </div>
 </div>
 
@@ -317,6 +317,8 @@ document.getElementById("joiningSectionValue").textContent = joining;
   document.getElementById("navigation").appendChild(button);
  });
  showSection("overview");
+ loadMyLeaves();
+ loadMyAttendance();
 }
 
 function showSection(id){
@@ -410,6 +412,63 @@ data.forEach(emp => {
   }
                             }
  
+
+function istDate(){
+ return new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Kolkata",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+}
+async function loadMyAttendance(){
+ const el=document.getElementById("attendanceHistory");
+ try{
+  const {data,error}=await getClient().from("attendance").select("date,status,check_in,check_out").eq("employee_id",currentUser.id).order("date",{ascending:false}).limit(10);
+  if(error)throw error;
+  const rows=data||[];
+  document.getElementById("attendanceSummary").textContent=rows.find(x=>x.date===istDate())?.status||"Not recorded";
+  el.replaceChildren();
+  const h=document.createElement("h3");h.textContent="My Recent Attendance";el.appendChild(h);
+  if(!rows.length){el.appendChild(document.createTextNode("No attendance records yet."));return;}
+  rows.forEach(x=>{const p=document.createElement("p");p.textContent=[x.date,x.status,x.check_in?"In: "+new Date(x.check_in).toLocaleTimeString("en-IN",{timeZone:"Asia/Kolkata"}):"",x.check_out?"Out: "+new Date(x.check_out).toLocaleTimeString("en-IN",{timeZone:"Asia/Kolkata"}):""].filter(Boolean).join(" | ");el.appendChild(p);});
+ }catch(e){el.textContent="Attendance unavailable: "+e.message;}
+}
+function checkGps(){
+ const el=document.getElementById("gpsStatus");
+ if(!navigator.geolocation){el.textContent="Geolocation is unavailable on this device.";return;}
+ el.textContent="Checking location (permission required)…";
+ navigator.geolocation.getCurrentPosition(p=>{
+  const lat=p.coords.latitude,lon=p.coords.longitude,accuracy=p.coords.accuracy;
+  const rad=Math.PI/180;
+  const dlat=(lat-22.573713)*rad,dlon=(lon-88.433980)*rad;
+  const a=Math.sin(dlat/2)**2+Math.cos(lat*rad)*Math.cos(22.573713*rad)*Math.sin(dlon/2)**2;
+  const distance=6371000*2*Math.asin(Math.min(1,Math.sqrt(a)));
+  el.textContent="Approx. "+Math.round(distance)+" m from saved office pin; GPS accuracy ±"+Math.round(accuracy)+" m. "+(distance<=50&&accuracy<=50?"Within configured range (unverified).":"Outside range or accuracy insufficient.")+" This does not record attendance.";
+ },e=>{el.textContent="Location unavailable: "+e.message;},{enableHighAccuracy:true,timeout:15000,maximumAge:0});
+}
+async function loadMyLeaves(){
+ const el=document.getElementById("leaveHistory");
+ if(!currentUser)return;
+ try{
+  const {data,error}=await getClient().from("leave_requests").select("start_date,end_date,reason,status,created_at").eq("employee_id",currentUser.id).order("created_at",{ascending:false}).limit(20);
+  if(error)throw error;
+  el.replaceChildren();
+  if(!data?.length){el.textContent="No leave requests yet.";return;}
+  data.forEach(x=>{const p=document.createElement("p");p.textContent=x.start_date+" to "+x.end_date+" — "+x.status+" — "+x.reason;el.appendChild(p);});
+ }catch(e){el.textContent="Unable to load leave requests: "+e.message;}
+}
+async function submitLeave(){
+ const msg=document.getElementById("leaveMessage"),btn=document.getElementById("submitLeaveButton");
+ const start=document.getElementById("leaveStart").value,end=document.getElementById("leaveEnd").value,reason=document.getElementById("leaveReason").value.trim();
+ if(!currentUser){msg.textContent="Please sign in.";return;}
+ if(!start||!end||end<start||!reason){msg.textContent="Enter valid dates and a reason.";return;}
+ btn.disabled=true;msg.textContent="Submitting…";
+ try{
+  const {error}=await getClient().from("leave_requests").insert({employee_id:currentUser.id,start_date:start,end_date:end,reason,status:"pending"});
+  if(error)throw error;
+  msg.textContent="Request submitted for HR review (pending).";
+  document.getElementById("leaveReason").value="";
+  await loadMyLeaves();
+ }catch(e){msg.textContent="Request not submitted: "+e.message;}
+ finally{btn.disabled=false;}
+}
+
 restoreSession();
 </script>
 </body>
