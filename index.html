@@ -149,6 +149,16 @@ nav button{font-size:13px}
 </div>
 </div>
 
+<div id="attendanceRequestForm" class="card">
+<h3>Late Entry / Half-Day Request</h3>
+<p class="muted small">Submit a request for HR review. This does not record attendance automatically.</p>
+<label for="attendanceRequestType">Request Type</label>
+<select id="attendanceRequestType" style="width:100%;padding:13px;border:1px solid #ccd5e3;border-radius:9px"><option value="late">Late Entry</option><option value="half_day">Half-Day</option></select>
+<label for="attendanceRequestDate">Date</label><input id="attendanceRequestDate" type="date">
+<label for="attendanceRequestReason">Reason</label><textarea id="attendanceRequestReason" placeholder="Explain your request"></textarea>
+<button type="button" id="attendanceRequestButton" onclick="submitAttendanceRequest()">Submit Request</button>
+<p id="attendanceRequestMessage" class="small" aria-live="polite"></p>
+</div>
 <div id="leave" class="section">
 <div class="card">
 <h2>Leave Management</h2>
@@ -270,6 +280,7 @@ async function loadUser(user){
  currentUser=user;
  currentRole=data.role==="hr"?"hr":"employee";
  document.getElementById("leave").classList.toggle("hidden",currentRole==="hr");
+ document.getElementById("attendanceRequestForm").classList.toggle("hidden",currentRole==="hr");
 
 document.getElementById("addEmployeeCard")
   .classList.toggle("hidden", currentRole !== "hr");
@@ -323,6 +334,7 @@ document.getElementById("joiningSectionValue").textContent = joining;
  });
  showSection("overview");
  if(currentRole==="hr")loadHrLeaveRequests();
+ document.getElementById("attendanceRequestDate").value=istDate();
  loadMyLeaves();
  loadMyAttendance();
  if(currentRole!=="hr")loadMyRequests();
@@ -448,6 +460,25 @@ function checkGps(){
   const distance=6371000*2*Math.asin(Math.min(1,Math.sqrt(a)));
   el.textContent="Approx. "+Math.round(distance)+" m from saved office pin; GPS accuracy ±"+Math.round(accuracy)+" m. "+(distance<=50&&accuracy<=50?"Within configured range (unverified).":"Outside range or accuracy insufficient.")+" This does not record attendance.";
  },e=>{el.textContent="Location unavailable: "+e.message;},{enableHighAccuracy:true,timeout:15000,maximumAge:0});
+}
+async function submitAttendanceRequest(){
+ const msg=document.getElementById("attendanceRequestMessage"),btn=document.getElementById("attendanceRequestButton");
+ if(!currentUser||currentRole==="hr"){msg.textContent="Employee sign-in required.";return;}
+ const type=document.getElementById("attendanceRequestType").value;
+ const date=document.getElementById("attendanceRequestDate").value;
+ const reason=document.getElementById("attendanceRequestReason").value.trim();
+ if(!date||!reason){msg.textContent="Select a date and enter a reason.";return;}
+ btn.disabled=true;msg.textContent="Submitting request…";
+ try{
+  const {error}=await getClient().from("attendance_requests").insert({
+   employee_id:currentUser.id,request_type:type,request_date:date,reason,status:"pending"
+  });
+  if(error)throw error;
+  msg.textContent="Request submitted. HR decision will appear in My Requests & Status.";
+  document.getElementById("attendanceRequestReason").value="";
+  await loadMyRequests();
+ }catch(e){msg.textContent="Request not submitted: "+(e.message||"Unknown error");}
+ finally{btn.disabled=false;}
 }
 async function loadMyLeaves(){
  const el=document.getElementById("leaveHistory");
