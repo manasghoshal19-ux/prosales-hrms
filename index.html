@@ -373,11 +373,38 @@ async function loadEmployees() {
 
     status.textContent = `${data.length} employee(s) found`;
 
-    data.forEach(emp => {
-      const item = document.createElement("p");
-      item.textContent = JSON.stringify(emp);
-      list.appendChild(item);
-    });
+    
+data.forEach(emp => {
+  const item = document.createElement("div");
+  item.className = "tile";
+  item.style.marginBottom = "12px";
+
+  const fields = [
+    ["Employee Name", emp.full_name],
+    ["Employee ID", emp.employee_code],
+    ["Designation", emp.designation],
+    ["Department", emp.department],
+    ["Joining Date", emp.date_of_joining],
+    ["Gross Salary", emp.gross_salary == null
+      ? "Not available"
+      : "₹" + Number(emp.gross_salary).toLocaleString("en-IN")]
+  ];
+
+  fields.forEach(([label, value]) => {
+    const p = document.createElement("p");
+    const strong = document.createElement("strong");
+    strong.textContent = label + ": ";
+    p.appendChild(strong);
+    p.appendChild(document.createTextNode(value ?? "Not available"));
+    item.appendChild(p);
+  });
+
+  list.appendChild(item);
+});
+    
+      
+      
+    
   } catch (err) {
     status.textContent = err.message;
   }
