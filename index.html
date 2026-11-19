@@ -17,7 +17,7 @@ main{max-width:1100px;margin:25px auto;padding:15px}
 h1{font-size:26px;margin-top:0}
 h2{font-size:21px}
 label{display:block;font-weight:bold;margin:16px 0 7px}
-input,textarea{width:100%;padding:13px;border:1px solid #ccd5e3;border-radius:9px;font-size:15px}
+input,textarea,select{width:100%;padding:13px;border:1px solid #ccd5e3;border-radius:9px;font-size:15px}
 button{background:#1457a3;color:white;border:0;border-radius:9px;padding:13px 17px;font-weight:bold;cursor:pointer;margin:5px 5px 5px 0}
 button.secondary{background:#e7eef8;color:#153a6b}
 button:disabled{opacity:.55}
@@ -149,6 +149,7 @@ nav button{font-size:13px}
 </div>
 </div>
 
+<div class="card" id="attendanceRequestCard"><h2>Late Entry / Half-Day Request</h2><p class="muted small">Submit a request for HR review. This does not mark attendance automatically.</p><label>Request Type</label><select id="attendanceRequestType"><option value="late">Late Entry</option><option value="half_day">Half-Day</option></select><label>Date</label><input id="attendanceRequestDate" type="date"><label>Reason</label><textarea id="attendanceRequestReason" placeholder="Explain your request"></textarea><button type="button" id="attendanceRequestButton" onclick="submitAttendanceRequest()">Submit Request</button><p id="attendanceRequestMessage" aria-live="polite"></p></div>
 <div id="leave" class="section">
 <div class="card">
 <h2>Leave Management</h2>
@@ -192,7 +193,7 @@ nav button{font-size:13px}
 <div id="approvals" class="section">
 <div class="card">
 <h2>HR Approval Centre</h2>
-<p class="muted">HR-only leave request overview. Approve/Reject actions will be enabled after server-side authorization is verified.</p><button type="button" onclick="loadHrLeaveRequests()">Refresh Leave Requests</button><p id="hrLeaveStatus" class="small muted"></p><div id="hrLeaveList"></div>
+<p class="muted">HR-only leave request overview. Approve/Reject actions will be enabled after server-side authorization is verified.</p><button type="button" onclick="loadHrLeaveRequests()">Refresh Leave Requests</button><p id="hrLeaveStatus" class="small muted"></p><div id="hrLeaveList"></div><hr><h2>Attendance Requests</h2><button type="button" onclick="loadHrAttendanceRequests()">Refresh Attendance Requests</button><p id="hrAttendanceStatus"></p><div id="hrAttendanceList"></div>
 </div>
 </div>
 </section>
@@ -270,6 +271,7 @@ async function loadUser(user){
  currentUser=user;
  currentRole=data.role==="hr"?"hr":"employee";
  document.getElementById("leave").classList.toggle("hidden",currentRole==="hr");
+ document.getElementById("attendanceRequestCard").classList.toggle("hidden",currentRole==="hr");
 
 document.getElementById("addEmployeeCard")
   .classList.toggle("hidden", currentRole !== "hr");
@@ -322,7 +324,7 @@ document.getElementById("joiningSectionValue").textContent = joining;
   document.getElementById("navigation").appendChild(button);
  });
  showSection("overview");
- if(currentRole==="hr")loadHrLeaveRequests();
+ if(currentRole==="hr"){loadHrLeaveRequests();loadHrAttendanceRequests();}
  loadMyLeaves();
  loadMyAttendance();
  if(currentRole!=="hr")loadMyRequests();
@@ -573,6 +575,66 @@ async function loadHrLeaveRequests(){
    list.appendChild(item);
   });
  }catch(e){status.textContent="Unable to load leave requests: "+e.message;}
+}
+
+async function submitAttendanceRequest(){
+ const msg=document.getElementById("attendanceRequestMessage"),btn=document.getElementById("attendanceRequestButton");
+ if(!currentUser||currentRole==="hr"){msg.textContent="Employee login required.";return;}
+ const type=document.getElementById("attendanceRequestType").value;
+ const date=document.getElementById("attendanceRequestDate").value;
+ const reason=document.getElementById("attendanceRequestReason").value.trim();
+ if(!date||!reason){msg.textContent="Select a date and enter a reason.";return;}
+ btn.disabled=true;msg.textContent="Submitting…";
+ try{
+  const {error}=await getClient().from("attendance_requests").insert({employee_id:currentUser.id,request_date:date,requested_status:type,reason,status:"pending"});
+  if(error)throw error;
+  msg.textContent="Request submitted. Awaiting HR decision.";
+  document.getElementById("attendanceRequestReason").value="";
+  await loadMyRequests();
+ }catch(e){msg.textContent="Unable to submit: "+e.message;}
+ finally{btn.disabled=false;}
+}
+async function decideHrAttendance(id,decision){
+ if(!currentUser||currentRole!=="hr"||!["approved","rejected"].includes(decision))return;
+ if(!confirm("Confirm "+decision+" for this attendance request?"))return;
+ const msg=document.getElementById("hrAttendanceStatus");
+ try{
+  const {data,error}=await getClient().from("attendance_requests").update({status:decision}).eq("id",id).eq("status","pending").select("id");
+  if(error)throw error;
+  if(!data||data.length!==1)throw new Error("Update not permitted or request already reviewed.");
+  await loadHrAttendanceRequests();
+ }catch(e){msg.textContent="Decision failed: "+e.message;}
+}
+async function loadHrAttendanceRequests(){
+ const msg=document.getElementById("hrAttendanceStatus"),list=document.getElementById("hrAttendanceList");
+ if(!msg||!list||!currentUser||currentRole!=="hr")return;
+ list.replaceChildren();msg.textContent="Loading…";
+ try{
+  const {data,error}=await getClient().from("attendance_requests").select("id,employee_id,request_date,requested_status,reason,status,created_at").order("created_at",{ascending:false}).limit(100);
+  if(error)throw error;
+  const rows=data||[];msg.textContent=rows.length+" request(s) found.";
+  const ids=[...new Set(rows.map(x=>x.employee_id).filter(Boolean))];
+  let names=new Map();
+  if(ids.length){
+   const r=await getClient().from("employees").select("id,full_name,employee_code").in("id",ids);
+   if(!r.error)names=new Map((r.data||[]).map(x=>[x.id,x]));
+  }
+  rows.forEach(x=>{
+   const item=document.createElement("div");item.className="request-row";
+   const p=document.createElement("p"),person=names.get(x.employee_id);
+   p.textContent=(person?.full_name||"Employee")+" ("+(person?.employee_code||x.employee_id)+") | "+x.request_date+" | "+x.requested_status+" | "+x.status;
+   const detail=document.createElement("p");detail.textContent="Reason: "+x.reason;
+   item.append(p,detail);
+   if(x.status==="pending"){
+    for(const [label,decision] of [["Approve","approved"],["Reject","rejected"]]){
+     const b=document.createElement("button");b.type="button";b.textContent=label;
+     if(decision==="rejected")b.className="secondary";
+     b.onclick=()=>decideHrAttendance(x.id,decision);item.appendChild(b);
+    }
+   }
+   list.appendChild(item);
+  });
+ }catch(e){msg.textContent="Unable to load requests: "+e.message;}
 }
 
 restoreSession();
