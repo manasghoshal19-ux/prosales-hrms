@@ -484,9 +484,17 @@ async function loadHrLeaveRequests(){
   const rows=data||[];
   status.textContent=rows.length+" leave request(s) found. Read-only until approval permissions are verified.";
   if(!rows.length)return;
+  const ids=[...new Set(rows.map(x=>x.employee_id).filter(Boolean))];
+  let people=new Map();
+  if(ids.length){
+   const {data:emps,error:empError}=await getClient().from("employees").select("id,full_name,employee_code").in("id",ids);
+   if(empError){status.textContent+=" Employee names unavailable: "+empError.message;}
+   else people=new Map((emps||[]).map(e=>[e.id,e]));
+  }
   rows.forEach(req=>{
    const item=document.createElement("div");item.className="tile";item.style.marginBottom="10px";
-   const entries=[["Employee",req.employee_id],["Dates",(req.start_date||"")+" to "+(req.end_date||"")],["Status",req.status],["Reason",req.reason],["Submitted",req.created_at?new Date(req.created_at).toLocaleString("en-IN",{timeZone:"Asia/Kolkata"}):""]];
+   const person=people.get(req.employee_id);
+   const entries=[["Employee Name",person?.full_name||"Name unavailable"],["Employee ID",person?.employee_code||req.employee_id],["Dates",(req.start_date||"")+" to "+(req.end_date||"")],["Status",req.status],["Reason",req.reason],["Submitted",req.created_at?new Date(req.created_at).toLocaleString("en-IN",{timeZone:"Asia/Kolkata"}):""]];
    entries.forEach(([name,value])=>{const p=document.createElement("p");const strong=document.createElement("strong");strong.textContent=name+": ";p.appendChild(strong);p.appendChild(document.createTextNode(String(value??"—")));item.appendChild(p);});
    list.appendChild(item);
   });
