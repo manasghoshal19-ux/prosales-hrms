@@ -267,6 +267,7 @@ async function loadUser(user){
 
  currentUser=user;
  currentRole=data.role==="hr"?"hr":"employee";
+ document.getElementById("leave").classList.toggle("hidden",currentRole==="hr");
 
 document.getElementById("addEmployeeCard")
   .classList.toggle("hidden", currentRole !== "hr");
@@ -297,7 +298,7 @@ document.getElementById("joiningSectionValue").textContent = joining;
  const modules=[
   ["overview","Dashboard"],
   ["attendance","Attendance"],
-  ["leave","Leave"],
+  ...(currentRole==="hr"?[]:[["leave","Leave"]]),
   ["salary","Salary"],
   ["incentives","Incentives"],
   ["documents","Documents"]
@@ -305,6 +306,7 @@ document.getElementById("joiningSectionValue").textContent = joining;
 
  if(currentRole==="hr"){
   modules.splice(1,0,["employees","Employees"]);
+  document.getElementById("leave").classList.add("hidden");
   modules.push(["approvals","HR Approvals"]);
  }
 
