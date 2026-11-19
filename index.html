@@ -469,7 +469,9 @@ async function submitAttendanceRequest(){
  const type=document.getElementById("attendanceRequestType").value;
  const date=document.getElementById("attendanceRequestDate").value;
  const reason=document.getElementById("attendanceRequestReason").value.trim();
- if(!date||!reason){msg.textContent="Select a date and enter a reason.";return;}
+ if(!["late","half_day"].includes(type)){msg.textContent="Choose Late Entry or Half-Day.";return;}
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date)){msg.textContent="Select a valid request date.";return;}
+ if(reason.length<5){msg.textContent="Please enter a reason of at least 5 characters.";return;}
  btn.disabled=true;msg.textContent="Submitting request…";
  try{
   const {error}=await getClient().from("attendance_requests").insert({
@@ -539,10 +541,10 @@ async function loadMyRequests(){
  }catch(e){msg.textContent="Leave requests unavailable: "+e.message;}
  try{
   const {data,error}=await getClient().from("attendance_requests")
-   .select("*").eq("employee_id",currentUser.id).limit(50);
+   .select("request_date,requested_status,reason,status,created_at").eq("employee_id",currentUser.id).order("created_at",{ascending:false}).limit(50);
   if(error)throw error;
   (data||[]).forEach(x=>{
-   const raw=String(x.request_type||x.type||x.attendance_type||x.requested_status||"").toLowerCase();
+   const raw=String(x.requested_status||"").toLowerCase();
    const type=raw.includes("half")?"Half-Day":raw.includes("late")?"Late Entry":raw.includes("remote")?"Remote Attendance":"Attendance Request";
    all.push({type,date:String(x.request_date||x.attendance_date||x.date||x.created_at?.slice(0,10)||"Date unavailable"),status:x.status,reason:x.reason||x.notes||"",created:x.created_at});
   });
