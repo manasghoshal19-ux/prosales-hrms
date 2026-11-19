@@ -419,14 +419,14 @@ function istDate(){
 async function loadMyAttendance(){
  const el=document.getElementById("attendanceHistory");
  try{
-  const {data,error}=await getClient().from("attendance").select("date,status,check_in,check_out").eq("employee_id",currentUser.id).order("date",{ascending:false}).limit(10);
+  const {data,error}=await getClient().from("attendance").select("attendance_date,status,check_in,check_out").eq("employee_id",currentUser.id).order("attendance_date",{ascending:false}).limit(10);
   if(error)throw error;
   const rows=data||[];
-  document.getElementById("attendanceSummary").textContent=rows.find(x=>x.date===istDate())?.status||"Not recorded";
+  document.getElementById("attendanceSummary").textContent=rows.find(x=>x.attendance_date===istDate())?.status||"Not recorded";
   el.replaceChildren();
   const h=document.createElement("h3");h.textContent="My Recent Attendance";el.appendChild(h);
   if(!rows.length){el.appendChild(document.createTextNode("No attendance records yet."));return;}
-  rows.forEach(x=>{const p=document.createElement("p");p.textContent=[x.date,x.status,x.check_in?"In: "+new Date(x.check_in).toLocaleTimeString("en-IN",{timeZone:"Asia/Kolkata"}):"",x.check_out?"Out: "+new Date(x.check_out).toLocaleTimeString("en-IN",{timeZone:"Asia/Kolkata"}):""].filter(Boolean).join(" | ");el.appendChild(p);});
+  rows.forEach(x=>{const p=document.createElement("p");p.textContent=[x.attendance_date,x.status,x.check_in?"In: "+new Date(x.check_in).toLocaleTimeString("en-IN",{timeZone:"Asia/Kolkata"}):"",x.check_out?"Out: "+new Date(x.check_out).toLocaleTimeString("en-IN",{timeZone:"Asia/Kolkata"}):""].filter(Boolean).join(" | ");el.appendChild(p);});
  }catch(e){el.textContent="Attendance unavailable: "+e.message;}
 }
 function checkGps(){
