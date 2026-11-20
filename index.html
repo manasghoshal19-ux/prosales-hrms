@@ -347,12 +347,12 @@ document.getElementById("joiningSectionValue").textContent = joining;
 
 function selectedPerformanceMonth(){
  const el=document.getElementById("performanceMonth");
- if(/^\\d{4}-\\d{2}$/.test(el.value))return el.value;
+ if(/^\d{4}-\d{2}$/.test(el.value))return el.value;
  const parts=new Intl.DateTimeFormat("en-US",{timeZone:"Asia/Kolkata",year:"numeric",month:"2-digit"}).formatToParts(new Date());
  const year=parts.find(p=>p.type==="year")?.value;
  const month=parts.find(p=>p.type==="month")?.value;
  const fallback=year+"-"+month;
- if(/^\\d{4}-\\d{2}$/.test(fallback))el.value=fallback;
+ if(/^\d{4}-\d{2}$/.test(fallback))el.value=fallback;
  return el.value;
 }
 function performanceTile(label,value,detail){
@@ -368,7 +368,7 @@ async function loadPerformance(){
  const status=document.getElementById("performanceStatus"),cards=document.getElementById("performanceCards");
  cards.replaceChildren();status.textContent="Loading…";
  const month=selectedPerformanceMonth();
- if(!/^\\d{4}-\\d{2}$/.test(month)){status.textContent="Select a month.";return;}
+ if(!/^\d{4}-\d{2}$/.test(month)){status.textContent="Select a month.";return;}
  try{
   let query=getClient().from("monthly_performance").select("employee_id,target_amount,achieved_amount,target_sales,achieved_sales").eq("month",month+"-01");
   if(currentRole!=="hr")query=query.eq("employee_id",currentUser.id);
@@ -391,9 +391,9 @@ async function loadPerformanceEmployees(){
  if(currentRole!=="hr")return;
  const select=document.getElementById("performanceEmployee");
  try{
-  const {data,error}=await getClient().from("employees").select("id,full_name,employee_code").order("full_name");
+  const {data,error}=await getClient().from("employees").select("id,full_name,employee_code,role").order("full_name");
   if(error)throw error;select.replaceChildren();
-  for(const e of (data||[]).filter(e=>!/suprabhat/i.test(e.full_name||""))){const option=document.createElement("option");option.value=e.id;option.textContent=(e.full_name||"Employee")+" ("+(e.employee_code||"—")+")";select.appendChild(option);}
+  for(const e of (data||[]).filter(e=>e.role!=="hr" && !/suprabhat/i.test(e.full_name||""))){const option=document.createElement("option");option.value=e.id;option.textContent=(e.full_name||"Employee")+" ("+(e.employee_code||"—")+")";select.appendChild(option);}
  }catch(e){document.getElementById("performanceSaveStatus").textContent="Employee list unavailable: "+e.message;}
 }
 async function savePerformance(){
@@ -402,7 +402,7 @@ async function savePerformance(){
  const employee_id=document.getElementById("performanceEmployee").value,month=selectedPerformanceMonth();
  const ids=["targetAmount","achievedAmount","targetSales","achievedSales"];
  const vals=ids.map(id=>document.getElementById(id).value);
- if(!employee_id||!/^\\d{4}-\\d{2}$/.test(month)||vals.some(x=>x===""||!Number.isFinite(Number(x))||Number(x)<0)||!Number.isInteger(Number(vals[2]))||!Number.isInteger(Number(vals[3]))){status.textContent="Select employee, month and enter valid non-negative amounts and whole sales counts.";return;}
+ if(!employee_id||!/^\d{4}-\d{2}$/.test(month)||vals.some(x=>x===""||!Number.isFinite(Number(x))||Number(x)<0)||!Number.isInteger(Number(vals[2]))||!Number.isInteger(Number(vals[3]))){status.textContent="Select employee, month and enter valid non-negative amounts and whole sales counts.";return;}
  status.textContent="Saving…";
  try{
   const {error}=await getClient().from("monthly_performance").upsert({employee_id,month:month+"-01",target_amount:Number(vals[0]),achieved_amount:Number(vals[1]),target_sales:Number(vals[2]),achieved_sales:Number(vals[3])},{onConflict:"employee_id,month"});
