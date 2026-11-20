@@ -177,7 +177,7 @@ nav button{font-size:13px}
 </div>
 </div>
 
-<div id="performance" class="section"><div class="card"><h2>Monthly Target &amp; Achievement</h2><label for="performanceMonth">Month</label><input id="performanceMonth" type="month" onchange="loadPerformance()"><p id="performanceStatus" class="muted" aria-live="polite"></p><div id="dailyPerformance"><h3>Daily &amp; Weekly Achievement</h3><p id="dailyPerformanceStatus" class="muted"></p><div id="weeklyPerformanceCards" class="grid"></div><h4>Daily Entries</h4><div id="dailyPerformanceList"></div></div><div id="performanceCards" class="grid"></div><div id="performanceAdmin" class="hidden"><h3>HR: Update Employee Performance</h3><h4>Daily Entry</h4><p class="muted">Select the employee in Monthly Target Setup below before saving a daily entry.</p><label>Entry Date</label><input id="dailyEntryDate" type="date"><label>Daily Amount Achieved (₹)</label><input id="dailyAmount" type="number" min="0" step="0.01"><label>Daily Sales Achieved</label><input id="dailySales" type="number" min="0" step="1"><button type="button" onclick="saveDailyPerformance()">Save Daily Entry</button><p id="dailySaveStatus" aria-live="polite"></p><hr><h4>Monthly Target Setup</h4><label>Employee</label><select id="performanceEmployee"></select><label>Amount Target (₹)</label><input id="targetAmount" type="number" min="0" step="0.01"><label>Amount Achieved (₹)</label><input id="achievedAmount" type="number" min="0" step="0.01"><label>Sales Target (count)</label><input id="targetSales" type="number" min="0" step="1"><label>Sales Achieved (count)</label><input id="achievedSales" type="number" min="0" step="1"><button type="button" onclick="savePerformance()">Save Performance</button><p id="performanceSaveStatus" aria-live="polite"></p></div></div></div>
+<div id="performance" class="section"><div class="card"><h2>Monthly Target &amp; Achievement</h2><label for="performanceMonth">Month</label><input id="performanceMonth" type="month" onchange="loadPerformance()"><p id="performanceStatus" class="muted" aria-live="polite"></p><div id="dailyPerformance"><h3>Daily &amp; Weekly Achievement</h3><p id="dailyPerformanceStatus" class="muted"></p><div id="weeklyPerformanceCards" class="grid"></div><h4>Daily Entries</h4><div id="dailyPerformanceList"></div></div><div id="performanceCards" class="grid"></div><div id="performanceAdmin" class="hidden"><h3>HR: Update Employee Performance</h3><h4>Daily Entry</h4><p class="muted">Select the employee in Monthly Target Setup below before saving a daily entry.</p><label>Entry Date</label><input id="dailyEntryDate" type="date"><label>Daily Amount Achieved (₹)</label><input id="dailyAmount" type="number" min="0" step="0.01"><label>Daily Sales Achieved</label><input id="dailySales" type="number" min="0" step="1"><button type="button" onclick="saveDailyPerformance()">Save Daily Entry</button><p id="dailySaveStatus" aria-live="polite"></p><hr><h4>Monthly Target Setup</h4><label>Employee</label><select id="performanceEmployee"></select><label>Amount Target (₹)</label><input id="targetAmount" type="number" min="0" step="0.01"><p class="muted">Amount Achieved is calculated automatically from Daily Entries.</p><input id="achievedAmount" type="hidden" value="0"><label>Sales Target (count)</label><input id="targetSales" type="number" min="0" step="1"><p class="muted">Sales Achieved is calculated automatically from Daily Entries.</p><input id="achievedSales" type="hidden" value="0"><button type="button" onclick="savePerformance()">Save Performance</button><p id="performanceSaveStatus" aria-live="polite"></p></div></div></div>
 <div id="incentives" class="section">
 <div class="card">
 <h2>Incentive Management</h2>
@@ -390,7 +390,7 @@ async function saveDailyPerformance(){
  status.textContent="Saving…";
  try{
   const {error}=await getClient().from("daily_performance").upsert({employee_id,entry_date,achieved_amount:Number(amount),achieved_sales:Number(sales)},{onConflict:"employee_id,entry_date"});
-  if(error)throw error;status.textContent="Daily entry saved. Same-date entries are replaced, not added twice.";await loadDailyPerformance();
+  if(error)throw error;status.textContent="Daily entry saved. Same-date entries are replaced, not added twice.";await loadPerformance();
  }catch(e){status.textContent="Not saved: "+e.message;}
 }
 
@@ -423,16 +423,27 @@ async function loadPerformance(){
   if(currentRole!=="hr")query=query.eq("employee_id",currentUser.id);
   const {data,error}=await query;
   if(error)throw error;
+  let dailyQuery=getClient().from("daily_performance").select("employee_id,achieved_amount,achieved_sales").gte("entry_date",month+"-01").lt("entry_date",nextMonth(month));
+  if(currentRole!=="hr")dailyQuery=dailyQuery.eq("employee_id",currentUser.id);
+  const {data:dailyRows,error:dailyError}=await dailyQuery;
+  if(dailyError)throw dailyError;
+  const totals=new Map();
+  for(const d of dailyRows||[]){
+   const t=totals.get(d.employee_id)||{amount:0,sales:0};
+   t.amount+=Number(d.achieved_amount);t.sales+=Number(d.achieved_sales);totals.set(d.employee_id,t);
+  }
   if(!data?.length){status.textContent="No target or achievement entered for this month.";await loadDailyPerformance();return;}
   status.textContent=currentRole==="hr"?"Monthly team performance":"Your monthly performance";
   for(const r of data){
-   const amountTarget=Number(r.target_amount),amountDone=Number(r.achieved_amount),salesTarget=Number(r.target_sales),salesDone=Number(r.achieved_sales);
+   const amountTarget=Number(r.target_amount),salesTarget=Number(r.target_sales);
+   const daily=totals.get(r.employee_id);
+   const amountDone=daily?daily.amount:0,salesDone=daily?daily.sales:0;
    const section=document.createElement("div");section.style.gridColumn="1 / -1";
    if(currentRole==="hr"){const p=document.createElement("p");p.textContent="Employee: "+performanceEmployeeName(r.employee_id);section.appendChild(p);}
    const grid=document.createElement("div");grid.className="grid";
    const money=n=>"₹"+n.toLocaleString("en-IN");
    grid.append(performanceTile("Amount Target",money(amountTarget),"Achieved: "+money(amountDone)),performanceTile("Amount Achievement",performancePercent(amountDone,amountTarget),"Remaining: "+money(Math.max(0,amountTarget-amountDone))),performanceTile("Sales Target",String(salesTarget),"Achieved: "+salesDone),performanceTile("Sales Achievement",performancePercent(salesDone,salesTarget),"Remaining: "+Math.max(0,salesTarget-salesDone)));
-   section.appendChild(grid);cards.appendChild(section);
+   section.appendChild(grid);const note=document.createElement("p");note.className="muted";note.textContent="Achievement calculated from saved daily entries"+(daily?"":" (no daily entries yet)")+".";section.appendChild(note);cards.appendChild(section);
   }
  await loadDailyPerformance();
  }catch(e){status.textContent="Performance unavailable: "+e.message;await loadDailyPerformance();}
@@ -459,7 +470,9 @@ async function savePerformance(){
  if(vals.some(x=>x===""||!Number.isFinite(Number(x))||Number(x)<0)||!Number.isInteger(Number(vals[2]))||!Number.isInteger(Number(vals[3]))){status.textContent="Enter valid amounts and whole-number sales counts (zero is allowed).";return;}
  status.textContent="Saving…";
  try{
-  const {error}=await getClient().from("monthly_performance").upsert({employee_id,month:month+"-01",target_amount:Number(vals[0]),achieved_amount:Number(vals[1]),target_sales:Number(vals[2]),achieved_sales:Number(vals[3])},{onConflict:"employee_id,month"});
+  const {data:existing,error:readError}=await getClient().from("monthly_performance").select("achieved_amount,achieved_sales").eq("employee_id",employee_id).eq("month",month+"-01").maybeSingle();
+  if(readError)throw readError;
+  const {error}=await getClient().from("monthly_performance").upsert({employee_id,month:month+"-01",target_amount:Number(vals[0]),achieved_amount:existing?.achieved_amount??0,target_sales:Number(vals[2]),achieved_sales:existing?.achieved_sales??0},{onConflict:"employee_id,month"});
   if(error)throw error;status.textContent="Performance saved.";await loadPerformance();
  }catch(e){status.textContent="Not saved: "+e.message;}
 }
