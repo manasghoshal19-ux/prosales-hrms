@@ -393,7 +393,7 @@ async function loadPerformanceEmployees(){
  try{
   const {data,error}=await getClient().from("employees").select("id,full_name,employee_code").order("full_name");
   if(error)throw error;select.replaceChildren();
-  for(const e of data||[]){const option=document.createElement("option");option.value=e.id;option.textContent=(e.full_name||"Employee")+" ("+(e.employee_code||"—")+")";select.appendChild(option);}
+  for(const e of (data||[]).filter(e=>!/suprabhat/i.test(e.full_name||""))){const option=document.createElement("option");option.value=e.id;option.textContent=(e.full_name||"Employee")+" ("+(e.employee_code||"—")+")";select.appendChild(option);}
  }catch(e){document.getElementById("performanceSaveStatus").textContent="Employee list unavailable: "+e.message;}
 }
 async function savePerformance(){
