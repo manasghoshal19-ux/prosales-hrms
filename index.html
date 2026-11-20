@@ -177,7 +177,7 @@ nav button{font-size:13px}
 </div>
 </div>
 
-<div id="performance" class="section"><div class="card"><h2>Monthly Target &amp; Achievement</h2><label for="performanceMonth">Month</label><input id="performanceMonth" type="month" onchange="loadPerformance()"><p id="performanceStatus" class="muted" aria-live="polite"></p><div id="performanceCards" class="grid"></div><div id="performanceAdmin" class="hidden"><h3>HR: Update Employee Performance</h3><label>Employee</label><select id="performanceEmployee"></select><label>Amount Target (₹)</label><input id="targetAmount" type="number" min="0" step="0.01"><label>Amount Achieved (₹)</label><input id="achievedAmount" type="number" min="0" step="0.01"><label>Sales Target (count)</label><input id="targetSales" type="number" min="0" step="1"><label>Sales Achieved (count)</label><input id="achievedSales" type="number" min="0" step="1"><button type="button" onclick="savePerformance()">Save Performance</button><p id="performanceSaveStatus" aria-live="polite"></p></div></div></div>
+<div id="performance" class="section"><div class="card"><h2>Monthly Target &amp; Achievement</h2><label for="performanceMonth">Month</label><input id="performanceMonth" type="month" onchange="loadPerformance()"><p id="performanceStatus" class="muted" aria-live="polite"></p><div id="performanceCards" class="grid"></div><div id="dailyPerformance"><h3>Daily &amp; Weekly Achievement</h3><p id="dailyPerformanceStatus" class="muted"></p><div id="weeklyPerformanceCards" class="grid"></div><h4>Daily Entries</h4><div id="dailyPerformanceList"></div></div><div id="performanceAdmin" class="hidden"><h3>HR: Update Employee Performance</h3><h4>Daily Entry</h4><label>Entry Date</label><input id="dailyEntryDate" type="date"><label>Daily Amount Achieved (₹)</label><input id="dailyAmount" type="number" min="0" step="0.01"><label>Daily Sales Achieved</label><input id="dailySales" type="number" min="0" step="1"><button type="button" onclick="saveDailyPerformance()">Save Daily Entry</button><p id="dailySaveStatus" aria-live="polite"></p><hr><h4>Monthly Target Setup</h4><label>Employee</label><select id="performanceEmployee"></select><label>Amount Target (₹)</label><input id="targetAmount" type="number" min="0" step="0.01"><label>Amount Achieved (₹)</label><input id="achievedAmount" type="number" min="0" step="0.01"><label>Sales Target (count)</label><input id="targetSales" type="number" min="0" step="1"><label>Sales Achieved (count)</label><input id="achievedSales" type="number" min="0" step="1"><button type="button" onclick="savePerformance()">Save Performance</button><p id="performanceSaveStatus" aria-live="polite"></p></div></div></div>
 <div id="incentives" class="section">
 <div class="card">
 <h2>Incentive Management</h2>
@@ -336,6 +336,7 @@ document.getElementById("joiningSectionValue").textContent = joining;
  document.getElementById("performanceMonth").value=year+"-"+month;
  document.getElementById("performanceAdmin").classList.toggle("hidden",currentRole!=="hr");
  loadPerformance();
+ document.getElementById("dailyEntryDate").value=new Date().toLocaleDateString("en-CA",{timeZone:"Asia/Kolkata"});
  if(currentRole==="hr")loadPerformanceEmployees();
  if(currentRole==="hr"){loadHrLeaveRequests();loadHrAttendanceRequests();}
  if(currentRole==="viewer"){loadViewerDirectory();loadViewerAttendance();loadViewerLeaves();}
@@ -344,6 +345,52 @@ document.getElementById("joiningSectionValue").textContent = joining;
  if(currentRole==="employee")loadMyRequests();
 }
 
+
+
+function localDateValue(date){return date.getFullYear()+"-"+String(date.getMonth()+1).padStart(2,"0")+"-"+String(date.getDate()).padStart(2,"0");}
+function mondayOf(dateStr){const d=new Date(dateStr+"T12:00:00");d.setDate(d.getDate()-((d.getDay()+6)%7));return localDateValue(d);}
+async function loadDailyPerformance(){
+ const status=document.getElementById("dailyPerformanceStatus"),list=document.getElementById("dailyPerformanceList"),cards=document.getElementById("weeklyPerformanceCards");
+ list.replaceChildren();cards.replaceChildren();
+ const month=selectedPerformanceMonth();if(!/^\d{4}-\d{2}$/.test(month))return;
+ status.textContent="Loading daily and weekly entries…";
+ try{
+  let query=getClient().from("daily_performance").select("employee_id,entry_date,achieved_amount,achieved_sales").gte("entry_date",month+"-01").lt("entry_date",nextMonth(month)).order("entry_date",{ascending:false});
+  if(currentRole!=="hr")query=query.eq("employee_id",currentUser.id);
+  const {data,error}=await query;if(error)throw error;
+  const rows=data||[];
+  if(!rows.length){status.textContent="No daily entries for this month yet.";return;}
+  status.textContent="Daily entries and weekly totals (Monday–Sunday)";
+  const weekly=new Map();
+  for(const r of rows){
+   const week=mondayOf(r.entry_date),key=(currentRole==="hr"?r.employee_id+"|":"")+week;
+   const old=weekly.get(key)||{week,employee:r.employee_id,amount:0,sales:0};
+   old.amount+=Number(r.achieved_amount);old.sales+=Number(r.achieved_sales);weekly.set(key,old);
+   const p=document.createElement("p");p.className="request-row";
+   p.textContent=(currentRole==="hr"?(document.querySelector('#performanceEmployee option[value="'+r.employee_id+'"]')?.textContent||r.employee_id)+" · ":"")+r.entry_date+" — ₹"+Number(r.achieved_amount).toLocaleString("en-IN")+" | "+r.achieved_sales+" sales";
+   list.appendChild(p);
+  }
+  for(const w of [...weekly.values()].sort((a,b)=>b.week.localeCompare(a.week))){
+   const end=new Date(w.week+"T12:00:00");end.setDate(end.getDate()+6);
+   const label=w.week+" to "+localDateValue(end);
+   cards.append(performanceTile("Week "+label,"₹"+w.amount.toLocaleString("en-IN"),w.sales+" sales"+(currentRole==="hr"?" · "+(document.querySelector('#performanceEmployee option[value="'+w.employee+'"]')?.textContent||w.employee):"")));
+  }
+ }catch(e){status.textContent="Daily tracking unavailable until database setup is completed: "+e.message;}
+}
+function nextMonth(month){const [y,m]=month.split("-").map(Number);return (m===12?y+1:y)+"-"+String(m===12?1:m+1).padStart(2,"0")+"-01";}
+async function saveDailyPerformance(){
+ const status=document.getElementById("dailySaveStatus");
+ if(currentRole!=="hr"){status.textContent="HR access required.";return;}
+ const employee_id=document.getElementById("performanceEmployee").value;
+ const entry_date=document.getElementById("dailyEntryDate").value;
+ const amount=document.getElementById("dailyAmount").value,sales=document.getElementById("dailySales").value;
+ if(!employee_id||!/^\d{4}-\d{2}-\d{2}$/.test(entry_date)||amount===""||sales===""||!Number.isFinite(Number(amount))||Number(amount)<0||!Number.isInteger(Number(sales))||Number(sales)<0){status.textContent="Select employee/date and enter valid daily amount and whole sales count.";return;}
+ status.textContent="Saving…";
+ try{
+  const {error}=await getClient().from("daily_performance").upsert({employee_id,entry_date,achieved_amount:Number(amount),achieved_sales:Number(sales)},{onConflict:"employee_id,entry_date"});
+  if(error)throw error;status.textContent="Daily entry saved. Same-date entries are replaced, not added twice.";await loadDailyPerformance();
+ }catch(e){status.textContent="Not saved: "+e.message;}
+}
 
 function selectedPerformanceMonth(){
  const el=document.getElementById("performanceMonth");
@@ -374,7 +421,7 @@ async function loadPerformance(){
   if(currentRole!=="hr")query=query.eq("employee_id",currentUser.id);
   const {data,error}=await query;
   if(error)throw error;
-  if(!data?.length){status.textContent="No target or achievement entered for this month.";return;}
+  if(!data?.length){status.textContent="No target or achievement entered for this month.";await loadDailyPerformance();return;}
   status.textContent=currentRole==="hr"?"Monthly team performance":"Your monthly performance";
   for(const r of data){
    const amountTarget=Number(r.target_amount),amountDone=Number(r.achieved_amount),salesTarget=Number(r.target_sales),salesDone=Number(r.achieved_sales);
@@ -385,7 +432,8 @@ async function loadPerformance(){
    grid.append(performanceTile("Amount Target",money(amountTarget),"Achieved: "+money(amountDone)),performanceTile("Amount Achievement",performancePercent(amountDone,amountTarget),"Remaining: "+money(Math.max(0,amountTarget-amountDone))),performanceTile("Sales Target",String(salesTarget),"Achieved: "+salesDone),performanceTile("Sales Achievement",performancePercent(salesDone,salesTarget),"Remaining: "+Math.max(0,salesTarget-salesDone)));
    section.appendChild(grid);cards.appendChild(section);
   }
- }catch(e){status.textContent="Performance unavailable: "+e.message;}
+ await loadDailyPerformance();
+ }catch(e){status.textContent="Performance unavailable: "+e.message;await loadDailyPerformance();}
 }
 async function loadPerformanceEmployees(){
  if(currentRole!=="hr")return;
