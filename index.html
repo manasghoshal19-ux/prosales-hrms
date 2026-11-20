@@ -146,7 +146,7 @@ nav button{font-size:13px}
 <p><b>Office radius:</b> 100 metres (verified against office server)</p><button class="secondary" type="button" onclick="checkGps()">Check My GPS Location</button><p id="gpsStatus" class="small muted" aria-live="polite"></p><p id="attendanceHistory" class="small muted"></p>
 <button disabled title="Server-side attendance recording is not ready">Office Check-In</button>
 <button class="secondary" disabled>Request Remote Attendance</button>
-<p class="muted small">Check-in and check-out remain disabled until authenticated server-side recording is verified. GPS verification checks the server but does not record attendance.</p>
+<p class="muted small">Check-in and check-out remain disabled until authenticated server-side recording is verified. GPS checks alone cannot securely prove physical presence because device coordinates can be spoofed. Attendance recording remains disabled until trusted server-side location enforcement and check-in/check-out RPCs are verified.</p>
 </div>
 </div>
 
@@ -575,7 +575,7 @@ function istDate(){
 async function loadMyAttendance(){
  const el=document.getElementById("attendanceHistory");
  try{
-  const {data,error}=await getClient().from("attendance").select("attendance_date,status,check_in,check_out").eq("employee_id",currentUser.id).order("attendance_date",{ascending:false}).limit(10);
+  const {data,error}=await getClient().from("office_attendance").select("attendance_date,status,check_in,check_out").eq("employee_id",currentUser.id).order("attendance_date",{ascending:false}).limit(10);
   if(error)throw error;
   const rows=data||[];
   document.getElementById("attendanceSummary").textContent=rows.find(x=>x.attendance_date===istDate())?.status||"Not recorded";
@@ -598,7 +598,7 @@ function checkGps(){
    });
    if(error)throw error;
    el.textContent=data===true
-    ?"Office GPS verified. Attendance recording is not enabled yet."
+    ?"Office GPS check passed. This does not record attendance or prove secure server-side location enforcement."
     :"GPS verification failed: outside office radius or accuracy insufficient. Attendance not recorded.";
   }catch(e){el.textContent="GPS verification unavailable: "+e.message+" Attendance not recorded.";}
  },e=>{el.textContent="Location unavailable: "+e.message;},{enableHighAccuracy:true,timeout:15000,maximumAge:0});
@@ -811,7 +811,7 @@ async function loadViewerAttendance(){
  const msg=document.getElementById("viewerAttendanceStatus"),list=document.getElementById("viewerAttendanceList");
  list.replaceChildren();msg.textContent="Loading…";
  try{
-  const {data,error}=await getClient().from("attendance").select("employee_id,attendance_date,status,check_in,check_out").order("attendance_date",{ascending:false}).limit(100);
+  const {data,error}=await getClient().from("office_attendance").select("employee_id,attendance_date,status,check_in,check_out").order("attendance_date",{ascending:false}).limit(100);
   if(error)throw error;
   msg.textContent=(data||[]).length+" recent records";
   (data||[]).forEach(x=>viewerRow(list,[["Employee ID",x.employee_id],["Date",x.attendance_date],["Status",x.status],["Check-in",x.check_in],["Check-out",x.check_out]]));
