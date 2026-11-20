@@ -81,7 +81,7 @@ nav button{font-size:13px}
 </div>
 
 
-<div id="viewerDirectory" class="section"><div class="card"><h2>Employee Directory</h2><p class="muted">Administrator · Employee information</p><button type="button" onclick="loadViewerDirectory()">Refresh Directory</button><p id="viewerDirectoryStatus" aria-live="polite"></p><div id="viewerDirectoryList"></div></div></div><div id="viewerAttendance" class="section"><div class="card"><h2>Attendance Reports</h2><button type="button" onclick="loadViewerAttendance()">Refresh Attendance</button><p id="viewerAttendanceStatus"></p><div id="viewerAttendanceList"></div></div></div><div id="viewerLeaves" class="section"><div class="card"><h2>Leave Reports</h2><button type="button" onclick="loadViewerLeaves()">Refresh Leaves</button><p id="viewerLeavesStatus"></p><div id="viewerLeavesList"></div></div></div><div id="employees" class="section">
+<div id="viewerDirectory" class="section"><div class="card"><h2>Employee Directory</h2><p class="muted">Administrator · Employee information</p><button type="button" onclick="loadViewerDirectory()">Refresh Directory</button><p id="viewerDirectoryStatus" aria-live="polite"></p><div id="viewerDirectoryList"></div></div></div><div id="viewerAttendance" class="section"><div class="card"><h2>Attendance Reports</h2><button type="button" onclick="loadViewerAttendance()">Refresh Attendance</button><p id="viewerAttendanceStatus"></p><div id="viewerAttendanceList"></div></div></div><div id="viewerLeaves" class="section"><div class="card"><h2>Leave Reports</h2><button type="button" onclick="loadViewerLeaves()">Refresh Leaves</button><p id="viewerLeavesStatus"></p><div id="viewerLeavesList"></div></div></div><div id="viewerPerformance" class="section"><div class="card"><h2>Target & Achievement Reports</h2><button type="button" onclick="loadViewerPerformance()">Refresh Targets</button><p id="viewerPerformanceStatus"></p><div id="viewerPerformanceList"></div></div></div><div id="viewerSalary" class="section"><div class="card"><h2>Salary Reports</h2><p class="muted">Read-only employee salaries. HR and viewer salaries are excluded.</p><button type="button" onclick="loadViewerSalary()">Refresh Salaries</button><p id="viewerSalaryStatus"></p><div id="viewerSalaryList"></div><p class="muted"></p></div></div><div id="employees" class="section">
   <div class="card">
     <h2>Employee Management</h2>
     <p class="muted">HR Employee Directory</p>
@@ -303,7 +303,7 @@ document.getElementById("salarySectionValue").textContent = salary;
 document.getElementById("joiningSectionValue").textContent = joining;
   
  const modules=currentRole==="viewer"?[
-  ["overview","Dashboard"],["viewerDirectory","Employees"],["viewerAttendance","Attendance Reports"],["viewerLeaves","Leave Reports"]
+  ["overview","Dashboard"],["viewerDirectory","Employees"],["viewerAttendance","Attendance Reports"],["viewerLeaves","Leave Reports"],["viewerPerformance","Target Reports"],["viewerSalary","Salary Reports"]
  ]:[
   ["overview","Dashboard"],
   ["attendance","Attendance"],
@@ -339,7 +339,7 @@ document.getElementById("joiningSectionValue").textContent = joining;
  document.getElementById("dailyEntryDate").value=new Date().toLocaleDateString("sv-SE",{timeZone:"Asia/Kolkata"});
  if(currentRole==="hr")loadPerformanceEmployees();
  if(currentRole==="hr"){loadHrLeaveRequests();loadHrAttendanceRequests();}
- if(currentRole==="viewer"){loadViewerDirectory();loadViewerAttendance();loadViewerLeaves();}
+ if(currentRole==="viewer"){loadViewerDirectory();loadViewerAttendance();loadViewerLeaves();loadViewerPerformance();loadViewerSalary();}
  loadMyLeaves();
  loadMyAttendance();
  if(currentRole==="employee")loadMyRequests();
@@ -806,6 +806,41 @@ async function loadViewerDirectory(){
   (data||[]).forEach(x=>viewerRow(list,[["Name",x.full_name],["Employee ID",x.employee_code],["Department",x.department],["Designation",x.designation],["Joining Date",x.date_of_joining]]));
  }catch(e){msg.textContent="Directory unavailable: "+e.message;}
 }
+let viewerPeople=new Map();
+async function viewerNames(){
+ if(viewerPeople.size)return viewerPeople;
+ const {data,error}=await getClient().rpc("prosales_viewer_people");
+ if(error)throw error;
+ viewerPeople=new Map((data||[]).filter(x=>x.id).map(x=>[x.id,x]));
+ return viewerPeople;
+}
+function viewerIdentity(id,names){
+ const person=names.get(id);
+ return person?(person.full_name||"Employee")+" ("+(person.employee_code||"—")+")":"Employee (name unavailable)";
+}
+async function loadViewerPerformance(){
+ if(currentRole!=="viewer")return;
+ const msg=document.getElementById("viewerPerformanceStatus"),list=document.getElementById("viewerPerformanceList");
+ list.replaceChildren();msg.textContent="Loading…";
+ try{
+  const names=await viewerNames();
+  const {data,error}=await getClient().rpc("prosales_viewer_targets");
+  if(error)throw error;
+  msg.textContent=(data||[]).length+" target records";
+  (data||[]).forEach(x=>viewerRow(list,[["Employee",viewerIdentity(x.employee_id,names)],["Month",x.month],["Amount Target",x.target_amount],["Amount Achieved",x.achieved_amount],["Sales Target",x.target_sales],["Sales Achieved",x.achieved_sales]]));
+ }catch(e){msg.textContent="Target reports unavailable: "+e.message;}
+}
+async function loadViewerSalary(){
+ if(currentRole!=="viewer")return;
+ const msg=document.getElementById("viewerSalaryStatus"),list=document.getElementById("viewerSalaryList");
+ list.replaceChildren();msg.textContent="Loading…";
+ try{
+  const {data,error}=await getClient().rpc("prosales_viewer_salary");
+  if(error)throw error;
+  msg.textContent=(data||[]).length+" employee salaries";
+  (data||[]).forEach(x=>viewerRow(list,[["Name",x.full_name],["Employee ID",x.employee_code],["Designation",x.designation],["Gross Salary",x.gross_salary==null?"Not set":"₹"+Number(x.gross_salary).toLocaleString("en-IN")]]));
+ }catch(e){msg.textContent="Salary reports unavailable: "+e.message;}
+}
 async function loadViewerAttendance(){
  if(currentRole!=="viewer")return;
  const msg=document.getElementById("viewerAttendanceStatus"),list=document.getElementById("viewerAttendanceList");
@@ -813,8 +848,9 @@ async function loadViewerAttendance(){
  try{
   const {data,error}=await getClient().from("office_attendance").select("employee_id,attendance_date,status,check_in,check_out").order("attendance_date",{ascending:false}).limit(100);
   if(error)throw error;
+  const names=await viewerNames();
   msg.textContent=(data||[]).length+" recent records";
-  (data||[]).forEach(x=>viewerRow(list,[["Employee ID",x.employee_id],["Date",x.attendance_date],["Status",x.status],["Check-in",x.check_in],["Check-out",x.check_out]]));
+  (data||[]).forEach(x=>viewerRow(list,[["Employee",viewerIdentity(x.employee_id,names)],["Date",x.attendance_date],["Status",x.status],["Check-in",x.check_in],["Check-out",x.check_out]]));
  }catch(e){msg.textContent="Attendance unavailable: "+e.message;}
 }
 async function loadViewerLeaves(){
@@ -824,8 +860,9 @@ async function loadViewerLeaves(){
  try{
   const {data,error}=await getClient().from("leave_requests").select("employee_id,start_date,end_date,status,reason").order("start_date",{ascending:false}).limit(100);
   if(error)throw error;
+  const names=await viewerNames();
   msg.textContent=(data||[]).length+" recent requests";
-  (data||[]).forEach(x=>viewerRow(list,[["Employee ID",x.employee_id],["Dates",(x.start_date||"")+" to "+(x.end_date||"")],["Status",x.status],["Reason",x.reason]]));
+  (data||[]).forEach(x=>viewerRow(list,[["Employee",viewerIdentity(x.employee_id,names)],["Dates",(x.start_date||"")+" to "+(x.end_date||"")],["Status",x.status],["Reason",x.reason]]));
  }catch(e){msg.textContent="Leave reports unavailable: "+e.message;}
 }
 
