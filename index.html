@@ -177,6 +177,7 @@ nav button{font-size:13px}
 </div>
 </div>
 
+<div id="performance" class="section"><div class="card"><h2>Monthly Target &amp; Achievement</h2><label for="performanceMonth">Month</label><input id="performanceMonth" type="month" onchange="loadPerformance()"><p id="performanceStatus" class="muted" aria-live="polite"></p><div id="performanceCards" class="grid"></div><div id="performanceAdmin" class="hidden"><h3>HR: Update Employee Performance</h3><label>Employee</label><select id="performanceEmployee"></select><label>Amount Target (₹)</label><input id="targetAmount" type="number" min="0" step="0.01"><label>Amount Achieved (₹)</label><input id="achievedAmount" type="number" min="0" step="0.01"><label>Sales Target (count)</label><input id="targetSales" type="number" min="0" step="1"><label>Sales Achieved (count)</label><input id="achievedSales" type="number" min="0" step="1"><button type="button" onclick="savePerformance()">Save Performance</button><p id="performanceSaveStatus" aria-live="polite"></p></div></div></div>
 <div id="incentives" class="section">
 <div class="card">
 <h2>Incentive Management</h2>
@@ -309,6 +310,7 @@ document.getElementById("joiningSectionValue").textContent = joining;
   ...(currentRole==="hr"?[]:[["requests","My Requests & Status"]]),
   ...(currentRole==="hr"?[]:[["leave","Leave"]]),
   ...(currentRole==="employee"?[["salary","Salary"]]:[]),
+  ["performance","Targets & Achievement"],
   ["incentives","Incentives"],
   ["documents","Documents"]
  ];
@@ -328,11 +330,71 @@ document.getElementById("joiningSectionValue").textContent = joining;
   document.getElementById("navigation").appendChild(button);
  });
  showSection("overview");
+ document.getElementById("performanceMonth").value=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Kolkata",year:"numeric",month:"2-digit"}).format(new Date()).slice(0,7);
+ document.getElementById("performanceAdmin").classList.toggle("hidden",currentRole!=="hr");
+ loadPerformance();
+ if(currentRole==="hr")loadPerformanceEmployees();
  if(currentRole==="hr"){loadHrLeaveRequests();loadHrAttendanceRequests();}
  if(currentRole==="viewer"){loadViewerDirectory();loadViewerAttendance();loadViewerLeaves();}
  loadMyLeaves();
  loadMyAttendance();
  if(currentRole==="employee")loadMyRequests();
+}
+
+
+function performanceTile(label,value,detail){
+ const tile=document.createElement("div");tile.className="tile";
+ const heading=document.createElement("span");heading.textContent=label;
+ const number=document.createElement("strong");number.textContent=value;
+ const small=document.createElement("p");small.className="small muted";small.textContent=detail;
+ tile.append(heading,number,small);return tile;
+}
+function performancePercent(achieved,target){return target>0?(achieved/target*100).toFixed(1)+"%":"Not set";}
+async function loadPerformance(){
+ if(!currentUser)return;
+ const status=document.getElementById("performanceStatus"),cards=document.getElementById("performanceCards");
+ cards.replaceChildren();status.textContent="Loading…";
+ const month=document.getElementById("performanceMonth").value;
+ if(!/^\\d{4}-\\d{2}$/.test(month)){status.textContent="Select a month.";return;}
+ try{
+  let query=getClient().from("monthly_performance").select("employee_id,target_amount,achieved_amount,target_sales,achieved_sales").eq("month",month+"-01");
+  if(currentRole!=="hr")query=query.eq("employee_id",currentUser.id);
+  const {data,error}=await query;
+  if(error)throw error;
+  if(!data?.length){status.textContent="No target or achievement entered for this month.";return;}
+  status.textContent=currentRole==="hr"?"Monthly team performance":"Your monthly performance";
+  for(const r of data){
+   const amountTarget=Number(r.target_amount),amountDone=Number(r.achieved_amount),salesTarget=Number(r.target_sales),salesDone=Number(r.achieved_sales);
+   const section=document.createElement("div");section.style.gridColumn="1 / -1";
+   if(currentRole==="hr"){const p=document.createElement("p");p.textContent="Employee: "+(document.querySelector('#performanceEmployee option[value="'+r.employee_id+'"]')?.textContent||r.employee_id);section.appendChild(p);}
+   const grid=document.createElement("div");grid.className="grid";
+   const money=n=>"₹"+n.toLocaleString("en-IN");
+   grid.append(performanceTile("Amount Target",money(amountTarget),"Achieved: "+money(amountDone)),performanceTile("Amount Achievement",performancePercent(amountDone,amountTarget),"Remaining: "+money(Math.max(0,amountTarget-amountDone))),performanceTile("Sales Target",String(salesTarget),"Achieved: "+salesDone),performanceTile("Sales Achievement",performancePercent(salesDone,salesTarget),"Remaining: "+Math.max(0,salesTarget-salesDone)));
+   section.appendChild(grid);cards.appendChild(section);
+  }
+ }catch(e){status.textContent="Performance unavailable: "+e.message;}
+}
+async function loadPerformanceEmployees(){
+ if(currentRole!=="hr")return;
+ const select=document.getElementById("performanceEmployee");
+ try{
+  const {data,error}=await getClient().from("employees").select("id,full_name,employee_code").order("full_name");
+  if(error)throw error;select.replaceChildren();
+  for(const e of data||[]){const option=document.createElement("option");option.value=e.id;option.textContent=(e.full_name||"Employee")+" ("+(e.employee_code||"—")+")";select.appendChild(option);}
+ }catch(e){document.getElementById("performanceSaveStatus").textContent="Employee list unavailable: "+e.message;}
+}
+async function savePerformance(){
+ const status=document.getElementById("performanceSaveStatus");
+ if(currentRole!=="hr"||!currentUser){status.textContent="HR access required.";return;}
+ const employee_id=document.getElementById("performanceEmployee").value,month=document.getElementById("performanceMonth").value;
+ const ids=["targetAmount","achievedAmount","targetSales","achievedSales"];
+ const vals=ids.map(id=>document.getElementById(id).value);
+ if(!employee_id||!/^\\d{4}-\\d{2}$/.test(month)||vals.some(x=>x===""||!Number.isFinite(Number(x))||Number(x)<0)||!Number.isInteger(Number(vals[2]))||!Number.isInteger(Number(vals[3]))){status.textContent="Select employee, month and enter valid non-negative amounts and whole sales counts.";return;}
+ status.textContent="Saving…";
+ try{
+  const {error}=await getClient().from("monthly_performance").upsert({employee_id,month:month+"-01",target_amount:Number(vals[0]),achieved_amount:Number(vals[1]),target_sales:Number(vals[2]),achieved_sales:Number(vals[3])},{onConflict:"employee_id,month"});
+  if(error)throw error;status.textContent="Performance saved.";await loadPerformance();
+ }catch(e){status.textContent="Not saved: "+e.message;}
 }
 
 function showSection(id){
