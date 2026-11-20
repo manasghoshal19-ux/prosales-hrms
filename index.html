@@ -345,6 +345,16 @@ document.getElementById("joiningSectionValue").textContent = joining;
 }
 
 
+function selectedPerformanceMonth(){
+ const el=document.getElementById("performanceMonth");
+ if(/^\\d{4}-\\d{2}$/.test(el.value))return el.value;
+ const parts=new Intl.DateTimeFormat("en-US",{timeZone:"Asia/Kolkata",year:"numeric",month:"2-digit"}).formatToParts(new Date());
+ const year=parts.find(p=>p.type==="year")?.value;
+ const month=parts.find(p=>p.type==="month")?.value;
+ const fallback=year+"-"+month;
+ if(/^\\d{4}-\\d{2}$/.test(fallback))el.value=fallback;
+ return el.value;
+}
 function performanceTile(label,value,detail){
  const tile=document.createElement("div");tile.className="tile";
  const heading=document.createElement("span");heading.textContent=label;
@@ -357,7 +367,7 @@ async function loadPerformance(){
  if(!currentUser)return;
  const status=document.getElementById("performanceStatus"),cards=document.getElementById("performanceCards");
  cards.replaceChildren();status.textContent="Loading…";
- const month=document.getElementById("performanceMonth").value;
+ const month=selectedPerformanceMonth();
  if(!/^\\d{4}-\\d{2}$/.test(month)){status.textContent="Select a month.";return;}
  try{
   let query=getClient().from("monthly_performance").select("employee_id,target_amount,achieved_amount,target_sales,achieved_sales").eq("month",month+"-01");
@@ -389,7 +399,7 @@ async function loadPerformanceEmployees(){
 async function savePerformance(){
  const status=document.getElementById("performanceSaveStatus");
  if(currentRole!=="hr"||!currentUser){status.textContent="HR access required.";return;}
- const employee_id=document.getElementById("performanceEmployee").value,month=document.getElementById("performanceMonth").value;
+ const employee_id=document.getElementById("performanceEmployee").value,month=selectedPerformanceMonth();
  const ids=["targetAmount","achievedAmount","targetSales","achievedSales"];
  const vals=ids.map(id=>document.getElementById(id).value);
  if(!employee_id||!/^\\d{4}-\\d{2}$/.test(month)||vals.some(x=>x===""||!Number.isFinite(Number(x))||Number(x)<0)||!Number.isInteger(Number(vals[2]))||!Number.isInteger(Number(vals[3]))){status.textContent="Select employee, month and enter valid non-negative amounts and whole sales counts.";return;}
