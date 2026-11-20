@@ -349,6 +349,8 @@ document.getElementById("joiningSectionValue").textContent = joining;
 
 function localDateValue(date){return date.getFullYear()+"-"+String(date.getMonth()+1).padStart(2,"0")+"-"+String(date.getDate()).padStart(2,"0");}
 function mondayOf(dateStr){const d=new Date(dateStr+"T12:00:00");d.setDate(d.getDate()-((d.getDay()+6)%7));return localDateValue(d);}
+let performanceEmployeeNames={};
+function performanceEmployeeName(id){return performanceEmployeeNames[id]||document.querySelector('#performanceEmployee option[value="'+id+'"]')?.textContent||"Employee (name unavailable)";}
 async function loadDailyPerformance(){
  const status=document.getElementById("dailyPerformanceStatus"),list=document.getElementById("dailyPerformanceList"),cards=document.getElementById("weeklyPerformanceCards");
  list.replaceChildren();cards.replaceChildren();
@@ -367,13 +369,13 @@ async function loadDailyPerformance(){
    const old=weekly.get(key)||{week,employee:r.employee_id,amount:0,sales:0};
    old.amount+=Number(r.achieved_amount);old.sales+=Number(r.achieved_sales);weekly.set(key,old);
    const p=document.createElement("p");p.className="request-row";
-   p.textContent=(currentRole==="hr"?(document.querySelector('#performanceEmployee option[value="'+r.employee_id+'"]')?.textContent||r.employee_id)+" · ":"")+r.entry_date+" — ₹"+Number(r.achieved_amount).toLocaleString("en-IN")+" | "+r.achieved_sales+" sales";
+   p.textContent=(currentRole==="hr"?(performanceEmployeeName(r.employee_id))+" · ":"")+r.entry_date+" — ₹"+Number(r.achieved_amount).toLocaleString("en-IN")+" | "+r.achieved_sales+" sales";
    list.appendChild(p);
   }
   for(const w of [...weekly.values()].sort((a,b)=>b.week.localeCompare(a.week))){
    const end=new Date(w.week+"T12:00:00");end.setDate(end.getDate()+6);
    const label=w.week+" to "+localDateValue(end);
-   cards.append(performanceTile("Week "+label,"₹"+w.amount.toLocaleString("en-IN"),w.sales+" sales"+(currentRole==="hr"?" · "+(document.querySelector('#performanceEmployee option[value="'+w.employee+'"]')?.textContent||w.employee):"")));
+   cards.append(performanceTile("Week "+label,"₹"+w.amount.toLocaleString("en-IN"),w.sales+" sales"+(currentRole==="hr"?" · "+(performanceEmployeeName(w.employee)):"")));
   }
  }catch(e){status.textContent="Daily tracking unavailable until database setup is completed: "+e.message;}
 }
@@ -426,7 +428,7 @@ async function loadPerformance(){
   for(const r of data){
    const amountTarget=Number(r.target_amount),amountDone=Number(r.achieved_amount),salesTarget=Number(r.target_sales),salesDone=Number(r.achieved_sales);
    const section=document.createElement("div");section.style.gridColumn="1 / -1";
-   if(currentRole==="hr"){const p=document.createElement("p");p.textContent="Employee: "+(document.querySelector('#performanceEmployee option[value="'+r.employee_id+'"]')?.textContent||r.employee_id);section.appendChild(p);}
+   if(currentRole==="hr"){const p=document.createElement("p");p.textContent="Employee: "+performanceEmployeeName(r.employee_id);section.appendChild(p);}
    const grid=document.createElement("div");grid.className="grid";
    const money=n=>"₹"+n.toLocaleString("en-IN");
    grid.append(performanceTile("Amount Target",money(amountTarget),"Achieved: "+money(amountDone)),performanceTile("Amount Achievement",performancePercent(amountDone,amountTarget),"Remaining: "+money(Math.max(0,amountTarget-amountDone))),performanceTile("Sales Target",String(salesTarget),"Achieved: "+salesDone),performanceTile("Sales Achievement",performancePercent(salesDone,salesTarget),"Remaining: "+Math.max(0,salesTarget-salesDone)));
@@ -441,7 +443,9 @@ async function loadPerformanceEmployees(){
  try{
   const {data,error}=await getClient().from("employees").select("id,full_name,employee_code,role").order("full_name");
   if(error)throw error;select.replaceChildren();
+  performanceEmployeeNames=Object.fromEntries((data||[]).map(e=>[e.id,(e.full_name||"Employee")+" ("+(e.employee_code||"—")+")"]));
   for(const e of (data||[]).filter(e=>e.role!=="hr" && !/suprabhat/i.test(e.full_name||""))){const option=document.createElement("option");option.value=e.id;option.textContent=(e.full_name||"Employee")+" ("+(e.employee_code||"—")+")";select.appendChild(option);}
+  await loadPerformance();
  }catch(e){document.getElementById("performanceSaveStatus").textContent="Employee list unavailable: "+e.message;}
 }
 async function savePerformance(){
