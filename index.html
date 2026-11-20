@@ -402,7 +402,9 @@ async function savePerformance(){
  const employee_id=document.getElementById("performanceEmployee").value,month=selectedPerformanceMonth();
  const ids=["targetAmount","achievedAmount","targetSales","achievedSales"];
  const vals=ids.map(id=>document.getElementById(id).value);
- if(!employee_id||!/^\d{4}-\d{2}$/.test(month)||vals.some(x=>x===""||!Number.isFinite(Number(x))||Number(x)<0)||!Number.isInteger(Number(vals[2]))||!Number.isInteger(Number(vals[3]))){status.textContent="Select employee, month and enter valid non-negative amounts and whole sales counts.";return;}
+ if(!employee_id){status.textContent="Please select an employee.";return;}
+ if(!/^\d{4}-\d{2}$/.test(month)){status.textContent="Month is invalid. Please select the month again.";return;}
+ if(vals.some(x=>x===""||!Number.isFinite(Number(x))||Number(x)<0)||!Number.isInteger(Number(vals[2]))||!Number.isInteger(Number(vals[3]))){status.textContent="Enter valid amounts and whole-number sales counts (zero is allowed).";return;}
  status.textContent="Saving…";
  try{
   const {error}=await getClient().from("monthly_performance").upsert({employee_id,month:month+"-01",target_amount:Number(vals[0]),achieved_amount:Number(vals[1]),target_sales:Number(vals[2]),achieved_sales:Number(vals[3])},{onConflict:"employee_id,month"});
