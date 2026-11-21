@@ -780,11 +780,17 @@ async function decideHrAttendance(id,decision){
  if(!currentUser||!canApproveRequests||!["approved","rejected"].includes(decision))return;
  if(!confirm("Confirm "+decision+" for this attendance request?"))return;
  const msg=document.getElementById("hrAttendanceStatus");
+ const buttons=[...document.querySelectorAll("#hrAttendanceList button")];
+ buttons.forEach(button=>button.disabled=true);
+ msg.textContent="Saving decision…";
  try{
   const {error}=await getClient().rpc("review_attendance_request",{p_request_id:id,p_approve:decision==="approved"});
   if(error)throw error;
   await loadHrAttendanceRequests();
- }catch(e){msg.textContent="Decision failed: "+e.message;}
+ }catch(e){
+  msg.textContent="Decision failed: "+e.message;
+  buttons.forEach(button=>button.disabled=false);
+ }
 }
 async function loadHrAttendanceRequests(){
  const msg=document.getElementById("hrAttendanceStatus"),list=document.getElementById("hrAttendanceList");
