@@ -704,7 +704,7 @@ async function loadMyRequests(){
  all.forEach(x=>appendMyRequest(list,x.type,x.date,x.status,x.reason));
 }
 
-async async function decideHrLeave(id,decision,actions){
+async function decideHrLeave(id,decision,actions){
  if(!currentUser||!canApproveRequests||!["approved","rejected"].includes(decision))return;
  if(!confirm("Confirm "+decision+" for this leave request?"))return;
  const buttons=actions.querySelectorAll("button");
