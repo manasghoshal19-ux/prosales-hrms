@@ -138,7 +138,7 @@ nav button{font-size:13px}
 
 
 <div id="attendance" class="section">
-<div class="card" id="attendanceRequestCard"><h2>Late Entry / Half-Day Request</h2><p class="muted small">Submit a request for HR review. This does not mark attendance automatically.</p><label>Request Type</label><select id="attendanceRequestType"><option value="late">Late Entry</option><option value="half_day">Half-Day</option></select><label>Date</label><input id="attendanceRequestDate" type="date"><label>Reason</label><textarea id="attendanceRequestReason" placeholder="Explain your request"></textarea><button type="button" id="attendanceRequestButton" onclick="submitAttendanceRequest()">Submit Request</button><p id="attendanceRequestMessage" aria-live="polite"></p></div>
+<div class="card" id="attendanceRequestCard"><h2>Late Entry / Half-Day Request</h2><p class="muted small">Submit a request for HR review. This does not mark attendance automatically.</p><label>Request Type</label><select id="attendanceRequestType"><option value="late">Late Entry</option><option value="half_day">Half-Day</option><option value="remote">Remote Attendance</option></select><label>Date</label><input id="attendanceRequestDate" type="date"><label>Reason</label><textarea id="attendanceRequestReason" placeholder="Explain your request"></textarea><button type="button" id="attendanceRequestButton" onclick="submitAttendanceRequest()">Submit Request</button><p id="attendanceRequestMessage" aria-live="polite"></p></div>
 <div class="card">
 <h2>Attendance Management</h2>
 <p><b>Office:</b> Indo Japan House, J-1/12, EP Block, Sector V, Bidhannagar, Kolkata 700091 (3rd Floor)</p>
@@ -146,8 +146,8 @@ nav button{font-size:13px}
 <p><b>Office radius:</b> 100 metres (verified against office server)</p><button class="secondary" type="button" onclick="checkGps()">Check My GPS Location</button><p id="gpsStatus" class="small muted" aria-live="polite"></p><p id="attendanceHistory" class="small muted"></p>
 <button id="officeCheckInButton" type="button" onclick="recordOfficeAttendance('in')">Office Check-In</button>
 <button id="officeCheckOutButton" type="button" onclick="recordOfficeAttendance('out')">Office Check-Out</button>
-<button class="secondary" disabled>Request Remote Attendance</button>
-<p class="muted small">Office attendance requires login, location permission and server-side GPS validation. Device GPS can be spoofed, so this is not tamper-proof proof of physical presence. Remote attendance remains unavailable pending HR approval workflow verification.</p>
+<button class="secondary" type="button" onclick="document.getElementById('attendanceRequestType').value='remote';document.getElementById('attendanceRequestCard').scrollIntoView({behavior:'smooth',block:'start'})">Request Remote Attendance</button>
+<p class="muted small">Office attendance requires login, location permission and server-side GPS validation. Device GPS can be spoofed, so this is not tamper-proof proof of physical presence. Remote attendance requests require HR or ADM002 approval; submitting a request does not automatically record attendance.</p>
 </div>
 </div>
 
