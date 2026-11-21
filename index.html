@@ -635,7 +635,7 @@ function checkGps(){
 }
 async function loadMyLeaves(){
  const el=document.getElementById("leaveHistory");
- if(!currentUser)return;
+ if(!currentUser||currentRole!=="employee")return;
  try{
   const {data,error}=await getClient().from("leave_requests").select("start_date,end_date,reason,status,created_at").eq("employee_id",currentUser.id).order("created_at",{ascending:false}).limit(20);
   if(error)throw error;
