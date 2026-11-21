@@ -144,7 +144,8 @@ nav button{font-size:13px}
 <p><b>Office:</b> Indo Japan House, J-1/12, EP Block, Sector V, Bidhannagar, Kolkata 700091 (3rd Floor)</p>
 <p><b>Check-in:</b> 10:45–10:59 AM on time; 11:00–11:59 AM late; from 12:00 PM half day.</p><p><b>Check-out window:</b> 6:15–6:30 PM IST</p>
 <p><b>Office radius:</b> 100 metres (verified against office server)</p><button class="secondary" type="button" onclick="checkGps()">Check My GPS Location</button><p id="gpsStatus" class="small muted" aria-live="polite"></p><p id="attendanceHistory" class="small muted"></p>
-<button disabled title="Server-side attendance recording is not ready">Office Check-In</button>
+<button id="officeCheckInButton" type="button" disabled title="Secure server-side attendance recording is not yet verified">Office Check-In</button>
+<button id="officeCheckOutButton" type="button" disabled title="Available after verified check-in and during the 6:15–6:30 PM IST window">Office Check-Out</button>
 <button class="secondary" disabled>Request Remote Attendance</button>
 <p class="muted small">Check-in and check-out remain disabled until authenticated server-side recording is verified. GPS checks alone cannot securely prove physical presence because device coordinates can be spoofed. Attendance recording remains disabled until trusted server-side location enforcement and check-in/check-out RPCs are verified.</p>
 </div>
