@@ -312,7 +312,7 @@ document.getElementById("salarySectionValue").textContent = salary;
 document.getElementById("joiningSectionValue").textContent = joining;
   
  const modules=currentRole==="viewer"?[
-  ["overview","Dashboard"],["viewerDirectory","Employees"],["viewerAttendance","Attendance Reports"],["viewerLeaves","Leave Reports"],["viewerPerformance","Target Reports"]
+  ["overview","Dashboard"],["viewerDirectory","Employees"],["viewerAttendance","Attendance Reports"],["viewerLeaves","Leave Reports"],["viewerPerformance","Target Reports"],["viewerSalary","Salary Reports"]
  ]:[
   ["overview","Dashboard"],
   ["attendance","Attendance"],
@@ -348,7 +348,7 @@ document.getElementById("joiningSectionValue").textContent = joining;
  document.getElementById("dailyEntryDate").value=new Date().toLocaleDateString("sv-SE",{timeZone:"Asia/Kolkata"});
  if(currentRole==="hr")loadPerformanceEmployees();
  if(canApproveRequests){loadHrLeaveRequests();loadHrAttendanceRequests();}
- if(currentRole==="viewer"){loadViewerDirectory();loadViewerAttendance();loadViewerLeaves();loadViewerPerformance();}
+ if(currentRole==="viewer"){loadViewerDirectory();loadViewerAttendance();loadViewerLeaves();loadViewerPerformance();loadViewerSalary();}
  if(currentRole==="employee"){
   loadMyLeaves();
   loadMyAttendance();
