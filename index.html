@@ -606,6 +606,7 @@ async function recordOfficeAttendance(action){
  const outButton=document.getElementById("officeCheckOutButton");
  if(!currentUser || currentRole!=="employee"){status.textContent="Employee login required for personal office attendance.";return;}
  if(action!=="in"&&action!=="out"){status.textContent="Invalid attendance action.";return;}
+ if(!window.isSecureContext){status.textContent="Office attendance requires HTTPS or a secure browser context.";return;}
  if(!navigator.geolocation){status.textContent="GPS is unavailable on this device.";return;}
  const button=action==="in"?inButton:outButton;
  const rpc=action==="in"?"office_check_in":"office_check_out";
