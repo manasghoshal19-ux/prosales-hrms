@@ -144,10 +144,10 @@ nav button{font-size:13px}
 <p><b>Office:</b> Indo Japan House, J-1/12, EP Block, Sector V, Bidhannagar, Kolkata 700091 (3rd Floor)</p>
 <p><b>Check-in:</b> 10:45–10:59 AM on time; 11:00–11:59 AM late; from 12:00 PM half day.</p><p><b>Check-out window:</b> 6:15–6:30 PM IST</p>
 <p><b>Office radius:</b> 100 metres (verified against office server)</p><button class="secondary" type="button" onclick="checkGps()">Check My GPS Location</button><p id="gpsStatus" class="small muted" aria-live="polite"></p><p id="attendanceHistory" class="small muted"></p>
-<button id="officeCheckInButton" type="button" disabled title="Secure server-side attendance recording is not yet verified">Office Check-In</button>
-<button id="officeCheckOutButton" type="button" disabled title="Available after verified check-in and during the 6:15–6:30 PM IST window">Office Check-Out</button>
+<button id="officeCheckInButton" type="button" onclick="recordOfficeAttendance('in')">Office Check-In</button>
+<button id="officeCheckOutButton" type="button" onclick="recordOfficeAttendance('out')">Office Check-Out</button>
 <button class="secondary" disabled>Request Remote Attendance</button>
-<p class="muted small">Check-in and check-out remain disabled until authenticated server-side recording is verified. GPS checks alone cannot securely prove physical presence because device coordinates can be spoofed. Attendance recording remains disabled until trusted server-side location enforcement and check-in/check-out RPCs are verified.</p>
+<p class="muted small">Office attendance requires login, location permission and server-side GPS validation. Device GPS can be spoofed, so this is not tamper-proof proof of physical presence. Remote attendance remains unavailable pending HR approval workflow verification.</p>
 </div>
 </div>
 
@@ -585,6 +585,29 @@ async function loadMyAttendance(){
   if(!rows.length){el.appendChild(document.createTextNode("No attendance records yet."));return;}
   rows.forEach(x=>{const p=document.createElement("p");p.textContent=[x.attendance_date,x.status,x.check_in?"In: "+new Date(x.check_in).toLocaleTimeString("en-IN",{timeZone:"Asia/Kolkata"}):"",x.check_out?"Out: "+new Date(x.check_out).toLocaleTimeString("en-IN",{timeZone:"Asia/Kolkata"}):""].filter(Boolean).join(" | ");el.appendChild(p);});
  }catch(e){el.textContent="Attendance unavailable: "+e.message;}
+}
+async function recordOfficeAttendance(action){
+ const status=document.getElementById("gpsStatus");
+ const inButton=document.getElementById("officeCheckInButton");
+ const outButton=document.getElementById("officeCheckOutButton");
+ if(!currentUser || currentRole==="viewer"){status.textContent="An employee or HR login is required.";return;}
+ if(!navigator.geolocation){status.textContent="GPS is unavailable on this device.";return;}
+ const button=action==="in"?inButton:outButton;
+ const rpc=action==="in"?"office_check_in":"office_check_out";
+ if(!window.confirm("Record your own office check-"+(action==="in"?"in":"out")+" now using your current GPS location?"))return;
+ inButton.disabled=true;outButton.disabled=true;
+ status.textContent="Getting fresh GPS location…";
+ try{
+  const position=await new Promise((resolve,reject)=>navigator.geolocation.getCurrentPosition(resolve,reject,{enableHighAccuracy:true,timeout:20000,maximumAge:0}));
+  const {latitude,longitude,accuracy}=position.coords;
+  if(![latitude,longitude,accuracy].every(Number.isFinite) || accuracy>50)throw new Error("GPS accuracy must be within 50 metres. Move to an open area and retry.");
+  status.textContent="Validating location and recording attendance…";
+  const {data,error}=await getClient().rpc(rpc,{p_lat:latitude,p_lon:longitude,p_accuracy:accuracy});
+  if(error)throw error;
+  status.textContent="Attendance recorded: "+String(data||"Success");
+  await loadMyAttendance();
+ }catch(e){status.textContent="Attendance not confirmed: "+(e.message||"Location or server error");}
+ finally{inButton.disabled=false;outButton.disabled=false;}
 }
 function checkGps(){
  const el=document.getElementById("gpsStatus");
