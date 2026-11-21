@@ -162,7 +162,7 @@ nav button{font-size:13px}
 <label>Reason</label>
 <textarea id="leaveReason" placeholder="Reason for leave"></textarea>
 <button type="button" onclick="submitLeave()" id="submitLeaveButton">Submit Leave Request</button><p id="leaveMessage" class="small" aria-live="polite"></p><h3>My Leave Requests</h3><div id="leaveHistory" class="small muted">Sign in to view requests.</div>
-<p class="muted small">Requests are sent for HR review. Approval and automatic leave marking are not yet active.</p>
+<p class="muted small">Requests are sent for HR review. Approved leave will appear in attendance only when the backend approval workflow is configured.</p>
 </div>
 </div>
 
@@ -704,7 +704,7 @@ async function loadMyRequests(){
  all.forEach(x=>appendMyRequest(list,x.type,x.date,x.status,x.reason));
 }
 
-async function decideHrLeave(id,decision,actions){
+async async function decideHrLeave(id,decision,actions){
  if(!currentUser||!canApproveRequests||!["approved","rejected"].includes(decision))return;
  if(!confirm("Confirm "+decision+" for this leave request?"))return;
  const buttons=actions.querySelectorAll("button");
