@@ -580,6 +580,7 @@ function istDate(){
  return new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Kolkata",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
 }
 async function loadMyAttendance(){
+ if(!currentUser||currentRole!=="employee")return;
  const el=document.getElementById("attendanceHistory");
  try{
   const {data,error}=await getClient().from("office_attendance").select("attendance_date,status,check_in,check_out").eq("employee_id",currentUser.id).order("attendance_date",{ascending:false}).limit(10);
@@ -678,7 +679,7 @@ function appendMyRequest(container,type,date,status,reason){
 }
 async function loadMyRequests(){
  const msg=document.getElementById("myRequestsMessage"),list=document.getElementById("myRequestsList");
- if(!msg||!list||!currentUser||currentRole==="hr")return;
+ if(!msg||!list||!currentUser||currentRole!=="employee")return;
  list.replaceChildren();msg.textContent="Loading your requests…";
  const all=[];
  try{
