@@ -577,7 +577,9 @@ data.forEach(emp => {
  
 
 function istDate(){
- return new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Kolkata",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+ const parts=new Intl.DateTimeFormat("en-US",{timeZone:"Asia/Kolkata",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date());
+ const get=type=>parts.find(part=>part.type===type)?.value;
+ return get("year")+"-"+get("month")+"-"+get("day");
 }
 async function loadMyAttendance(){
  if(!currentUser||currentRole!=="employee")return;
