@@ -272,8 +272,13 @@ async function loadUser(user){
   throw new Error("Employee profile not found or access denied. Contact HR.");
  }
 
+ const verifiedRole=String(data.role||"").toLowerCase();
+ if(!["employee","hr","viewer"].includes(verifiedRole)){
+  await client.auth.signOut();
+  throw new Error("Employee access role is missing or invalid. Contact HR.");
+ }
  currentUser=user;
- currentRole=data.role==="hr"?"hr":data.role==="viewer"?"viewer":"employee";
+ currentRole=verifiedRole;
  canApproveRequests=false;
  try { const check=await client.rpc("can_approve_requests"); if(!check.error)canApproveRequests=check.data===true; } catch(e) { console.warn("Approval access check failed",e); }
  document.getElementById("leave").classList.toggle("hidden",currentRole!=="employee");
