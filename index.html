@@ -756,7 +756,7 @@ async function loadHrLeaveRequests(){
  }catch(e){status.textContent="Unable to load leave requests: "+e.message;}
 }
 
-async async function submitAttendanceRequest(){
+async function submitAttendanceRequest(){
  const msg=document.getElementById("attendanceRequestMessage"),btn=document.getElementById("attendanceRequestButton");
  if(!currentUser||currentRole!=="employee"){msg.textContent="Employee login required.";return;}
  const type=document.getElementById("attendanceRequestType").value;
