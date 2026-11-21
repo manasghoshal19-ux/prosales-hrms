@@ -627,6 +627,9 @@ function checkGps(){
  navigator.geolocation.getCurrentPosition(async p=>{
   const {latitude,longitude,accuracy}=p.coords;
   try{
+   if(![latitude,longitude,accuracy].every(Number.isFinite) || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180 || accuracy < 0 || accuracy > 50){
+    throw new Error("GPS coordinates invalid or accuracy worse than 50 metres.");
+   }
    const {data,error}=await getClient().rpc("verify_office_gps",{
     p_latitude:latitude,p_longitude:longitude,p_accuracy:accuracy
    });
