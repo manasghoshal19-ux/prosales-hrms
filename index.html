@@ -627,6 +627,7 @@ async function recordOfficeAttendance(action){
 function checkGps(){
  const el=document.getElementById("gpsStatus");
  if(!currentUser||currentRole!=="employee"){el.textContent="Employee login required to verify office location.";return;}
+ if(!window.isSecureContext){el.textContent="GPS requires HTTPS or a secure browser context.";return;}
  if(!navigator.geolocation){el.textContent="Geolocation is unavailable on this device.";return;}
  el.textContent="Checking GPS with office server (permission required)…";
  navigator.geolocation.getCurrentPosition(async p=>{
