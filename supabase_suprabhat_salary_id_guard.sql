@@ -1,12 +1,13 @@
 -- PROSALES HRMS — Suprabhat salary viewer: identity-bound deployment template
--- IMPORTANT: This is NOT deployed. Verify the correct UUID in Supabase before running.
+-- IMPORTANT: This is NOT deployed. User supplied the Suprabhat Auth UID; confirm
+-- the employee profile is linked to this UID and the role is viewer before running.
 -- This migration fails closed until an operator supplies the verified auth user UUID.
 -- HR access and each employee's own salary access are managed by other RLS policies
 -- and must be separately audited; this function does not grant either.
 begin;
 do $$
 declare
-  suprabhat_auth_uid uuid := null; -- REPLACE NULL with verified Supabase auth.users.id
+  suprabhat_auth_uid uuid := 'eafbe941-b4c2-441f-bd00-c86459201e70'; -- Supabase Authentication > Users, Suprabhat account
   verified_name text;
   verified_role text;
 begin
