@@ -710,8 +710,9 @@ async function loadMyRequests(){
 async function decideHrLeave(id,decision,actions){
  if(!currentUser||!canApproveRequests||!["approved","rejected"].includes(decision))return;
  if(!confirm("Confirm "+decision+" for this leave request?"))return;
- const buttons=actions.querySelectorAll("button");
+ const buttons=document.querySelectorAll("#hrLeaveList button");
  buttons.forEach(b=>b.disabled=true);
+ document.getElementById("hrLeaveStatus").textContent="Saving decision…";
  try{
   const {error}=await getClient().rpc("approval_review_leave",{p_request_id:id,p_approve:decision==="approved"});
   if(error)throw error;
