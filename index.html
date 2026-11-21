@@ -196,7 +196,7 @@ nav button{font-size:13px}
 <div id="approvals" class="section">
 <div class="card">
 <h2>HR Approval Centre</h2>
-<p class="muted">HR-only leave request overview. Approve/Reject actions will be enabled after server-side authorization is verified.</p><button type="button" onclick="loadHrLeaveRequests()">Refresh Leave Requests</button><p id="hrLeaveStatus" class="small muted"></p><div id="hrLeaveList"></div><hr><h2>Attendance Requests</h2><button type="button" onclick="loadHrAttendanceRequests()">Refresh Attendance Requests</button><p id="hrAttendanceStatus"></p><div id="hrAttendanceList"></div>
+<p class="muted">Leave and attendance requests can be reviewed by authorized HR and ADM002 accounts. Decisions are recorded by secure server functions.</p><button type="button" onclick="loadHrLeaveRequests()">Refresh Leave Requests</button><p id="hrLeaveStatus" class="small muted"></p><div id="hrLeaveList"></div><hr><h2>Attendance Requests</h2><button type="button" onclick="loadHrAttendanceRequests()">Refresh Attendance Requests</button><p id="hrAttendanceStatus"></p><div id="hrAttendanceList"></div>
 </div>
 </div>
 </section>
@@ -212,6 +212,7 @@ const SUPABASE_KEY = "sb_publishable_0NPAnLOJoEsaP3-8JdWJFw__6_tSvTd";
 let db = null;
 let currentUser = null;
 let currentRole = "employee";
+let canApproveRequests = false;
 
 function message(text){
  document.getElementById("loginMessage").textContent=text;
@@ -273,6 +274,8 @@ async function loadUser(user){
 
  currentUser=user;
  currentRole=data.role==="hr"?"hr":data.role==="viewer"?"viewer":"employee";
+ canApproveRequests=false;
+ try { const check=await client.rpc("can_approve_requests"); if(!check.error)canApproveRequests=check.data===true; } catch(e) { console.warn("Approval access check failed",e); }
  document.getElementById("leave").classList.toggle("hidden",currentRole!=="employee");
  document.getElementById("attendanceRequestCard").classList.toggle("hidden",currentRole!=="employee");
 
@@ -319,8 +322,8 @@ document.getElementById("joiningSectionValue").textContent = joining;
  if(currentRole==="hr"){
   modules.splice(1,0,["employees","Employees"]);
   document.getElementById("leave").classList.add("hidden");
-  modules.push(["approvals","HR Approvals"]);
  }
+ if(canApproveRequests)modules.push(["approvals","Approvals"]);
 
  document.getElementById("navigation").innerHTML="";
  modules.forEach(([id,label])=>{
@@ -339,7 +342,7 @@ document.getElementById("joiningSectionValue").textContent = joining;
  loadPerformance();
  document.getElementById("dailyEntryDate").value=new Date().toLocaleDateString("sv-SE",{timeZone:"Asia/Kolkata"});
  if(currentRole==="hr")loadPerformanceEmployees();
- if(currentRole==="hr"){loadHrLeaveRequests();loadHrAttendanceRequests();}
+ if(canApproveRequests){loadHrLeaveRequests();loadHrAttendanceRequests();}
  if(currentRole==="viewer"){loadViewerDirectory();loadViewerAttendance();loadViewerLeaves();loadViewerPerformance();loadViewerSalary();}
  loadMyLeaves();
  loadMyAttendance();
@@ -492,6 +495,7 @@ async function logout(){
  }finally{
   currentUser=null;
   currentRole="employee";
+  canApproveRequests=false;
   document.getElementById("appPage").classList.add("hidden");
   document.getElementById("loginPage").classList.remove("hidden");
   document.getElementById("password").value="";
@@ -701,14 +705,13 @@ async function loadMyRequests(){
 }
 
 async function decideHrLeave(id,decision,actions){
- if(!currentUser||currentRole!=="hr"||!["approved","rejected"].includes(decision))return;
+ if(!currentUser||!canApproveRequests||!["approved","rejected"].includes(decision))return;
  if(!confirm("Confirm "+decision+" for this leave request?"))return;
  const buttons=actions.querySelectorAll("button");
  buttons.forEach(b=>b.disabled=true);
  try{
-  const {data,error}=await getClient().from("leave_requests").update({status:decision}).eq("id",id).eq("status","pending").select("id,status");
+  const {error}=await getClient().rpc("approval_review_leave",{p_request_id:id,p_approve:decision==="approved"});
   if(error)throw error;
-  if(!data||data.length!==1)throw new Error("Request was not updated. Check permissions or current status.");
   await loadHrLeaveRequests();
  }catch(e){
   document.getElementById("hrLeaveStatus").textContent="Decision failed: "+e.message;
@@ -718,7 +721,7 @@ async function decideHrLeave(id,decision,actions){
 async function loadHrLeaveRequests(){
  const status=document.getElementById("hrLeaveStatus"),list=document.getElementById("hrLeaveList");
  list.replaceChildren();
- if(!currentUser||currentRole!=="hr"){status.textContent="HR access required.";return;}
+ if(!currentUser||!canApproveRequests){status.textContent="Approval access required.";return;}
  status.textContent="Loading leave requests…";
  try{
   const {data,error}=await getClient().from("leave_requests").select("*").order("created_at",{ascending:false}).limit(100);
@@ -771,19 +774,18 @@ async function submitAttendanceRequest(){
  finally{btn.disabled=false;}
 }
 async function decideHrAttendance(id,decision){
- if(!currentUser||currentRole!=="hr"||!["approved","rejected"].includes(decision))return;
+ if(!currentUser||!canApproveRequests||!["approved","rejected"].includes(decision))return;
  if(!confirm("Confirm "+decision+" for this attendance request?"))return;
  const msg=document.getElementById("hrAttendanceStatus");
  try{
-  const {data,error}=await getClient().from("attendance_requests").update({status:decision}).eq("id",id).eq("status","pending").select("id");
+  const {error}=await getClient().rpc("review_attendance_request",{p_request_id:id,p_approve:decision==="approved"});
   if(error)throw error;
-  if(!data||data.length!==1)throw new Error("Update not permitted or request already reviewed.");
   await loadHrAttendanceRequests();
  }catch(e){msg.textContent="Decision failed: "+e.message;}
 }
 async function loadHrAttendanceRequests(){
  const msg=document.getElementById("hrAttendanceStatus"),list=document.getElementById("hrAttendanceList");
- if(!msg||!list||!currentUser||currentRole!=="hr")return;
+ if(!msg||!list||!currentUser||!canApproveRequests)return;
  list.replaceChildren();msg.textContent="Loading…";
  try{
   const {data,error}=await getClient().from("attendance_requests").select("id,employee_id,request_date,requested_status,reason,status,created_at").order("created_at",{ascending:false}).limit(100);
