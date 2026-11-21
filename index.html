@@ -162,7 +162,7 @@ nav button{font-size:13px}
 <label>Reason</label>
 <textarea id="leaveReason" placeholder="Reason for leave"></textarea>
 <button type="button" onclick="submitLeave()" id="submitLeaveButton">Submit Leave Request</button><p id="leaveMessage" class="small" aria-live="polite"></p><h3>My Leave Requests</h3><div id="leaveHistory" class="small muted">Sign in to view requests.</div>
-<p class="muted small">Requests are sent for HR review. Approval and automatic leave marking are not yet active.</p>
+<p class="muted small">Requests are sent for HR review. Approved leave will appear in attendance only when the backend approval workflow is configured.</p>
 </div>
 </div>
 
@@ -272,8 +272,13 @@ async function loadUser(user){
   throw new Error("Employee profile not found or access denied. Contact HR.");
  }
 
+ const verifiedRole=String(data.role||"").toLowerCase();
+ if(!["employee","hr","viewer"].includes(verifiedRole)){
+  await client.auth.signOut();
+  throw new Error("Employee access role is missing or invalid. Contact HR.");
+ }
  currentUser=user;
- currentRole=data.role==="hr"?"hr":data.role==="viewer"?"viewer":"employee";
+ currentRole=verifiedRole;
  canApproveRequests=false;
  try { const check=await client.rpc("can_approve_requests"); if(!check.error)canApproveRequests=check.data===true; } catch(e) { console.warn("Approval access check failed",e); }
  document.getElementById("leave").classList.toggle("hidden",currentRole!=="employee");
@@ -344,9 +349,11 @@ document.getElementById("joiningSectionValue").textContent = joining;
  if(currentRole==="hr")loadPerformanceEmployees();
  if(canApproveRequests){loadHrLeaveRequests();loadHrAttendanceRequests();}
  if(currentRole==="viewer"){loadViewerDirectory();loadViewerAttendance();loadViewerLeaves();loadViewerPerformance();loadViewerSalary();}
- loadMyLeaves();
- loadMyAttendance();
- if(currentRole==="employee")loadMyRequests();
+ if(currentRole==="employee"){
+  loadMyLeaves();
+  loadMyAttendance();
+  loadMyRequests();
+ }
 }
 
 
@@ -575,9 +582,12 @@ data.forEach(emp => {
  
 
 function istDate(){
- return new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Kolkata",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+ const parts=new Intl.DateTimeFormat("en-US",{timeZone:"Asia/Kolkata",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date());
+ const get=type=>parts.find(part=>part.type===type)?.value;
+ return get("year")+"-"+get("month")+"-"+get("day");
 }
 async function loadMyAttendance(){
+ if(!currentUser||currentRole!=="employee")return;
  const el=document.getElementById("attendanceHistory");
  try{
   const {data,error}=await getClient().from("office_attendance").select("attendance_date,status,check_in,check_out").eq("employee_id",currentUser.id).order("attendance_date",{ascending:false}).limit(10);
@@ -594,7 +604,9 @@ async function recordOfficeAttendance(action){
  const status=document.getElementById("gpsStatus");
  const inButton=document.getElementById("officeCheckInButton");
  const outButton=document.getElementById("officeCheckOutButton");
- if(!currentUser || currentRole==="viewer"){status.textContent="An employee or HR login is required.";return;}
+ if(!currentUser || currentRole!=="employee"){status.textContent="Employee login required for personal office attendance.";return;}
+ if(action!=="in"&&action!=="out"){status.textContent="Invalid attendance action.";return;}
+ if(!window.isSecureContext){status.textContent="Office attendance requires HTTPS or a secure browser context.";return;}
  if(!navigator.geolocation){status.textContent="GPS is unavailable on this device.";return;}
  const button=action==="in"?inButton:outButton;
  const rpc=action==="in"?"office_check_in":"office_check_out";
@@ -604,7 +616,7 @@ async function recordOfficeAttendance(action){
  try{
   const position=await new Promise((resolve,reject)=>navigator.geolocation.getCurrentPosition(resolve,reject,{enableHighAccuracy:true,timeout:20000,maximumAge:0}));
   const {latitude,longitude,accuracy}=position.coords;
-  if(![latitude,longitude,accuracy].every(Number.isFinite) || accuracy>50)throw new Error("GPS accuracy must be within 50 metres. Move to an open area and retry.");
+  if(![latitude,longitude,accuracy].every(Number.isFinite) || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180 || accuracy < 0 || accuracy > 50)throw new Error("Invalid GPS coordinates or accuracy worse than 50 metres. Move to an open area and retry.");
   status.textContent="Validating location and recording attendance…";
   const {data,error}=await getClient().rpc(rpc,{p_lat:latitude,p_lon:longitude,p_accuracy:accuracy});
   if(error)throw error;
@@ -615,12 +627,16 @@ async function recordOfficeAttendance(action){
 }
 function checkGps(){
  const el=document.getElementById("gpsStatus");
- if(!currentUser){el.textContent="Sign in to verify office location.";return;}
+ if(!currentUser||currentRole!=="employee"){el.textContent="Employee login required to verify office location.";return;}
+ if(!window.isSecureContext){el.textContent="GPS requires HTTPS or a secure browser context.";return;}
  if(!navigator.geolocation){el.textContent="Geolocation is unavailable on this device.";return;}
  el.textContent="Checking GPS with office server (permission required)…";
  navigator.geolocation.getCurrentPosition(async p=>{
   const {latitude,longitude,accuracy}=p.coords;
   try{
+   if(![latitude,longitude,accuracy].every(Number.isFinite) || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180 || accuracy < 0 || accuracy > 50){
+    throw new Error("GPS coordinates invalid or accuracy worse than 50 metres.");
+   }
    const {data,error}=await getClient().rpc("verify_office_gps",{
     p_latitude:latitude,p_longitude:longitude,p_accuracy:accuracy
    });
@@ -633,7 +649,7 @@ function checkGps(){
 }
 async function loadMyLeaves(){
  const el=document.getElementById("leaveHistory");
- if(!currentUser)return;
+ if(!currentUser||currentRole!=="employee")return;
  try{
   const {data,error}=await getClient().from("leave_requests").select("start_date,end_date,reason,status,created_at").eq("employee_id",currentUser.id).order("created_at",{ascending:false}).limit(20);
   if(error)throw error;
@@ -676,7 +692,7 @@ function appendMyRequest(container,type,date,status,reason){
 }
 async function loadMyRequests(){
  const msg=document.getElementById("myRequestsMessage"),list=document.getElementById("myRequestsList");
- if(!msg||!list||!currentUser||currentRole==="hr")return;
+ if(!msg||!list||!currentUser||currentRole!=="employee")return;
  list.replaceChildren();msg.textContent="Loading your requests…";
  const all=[];
  try{
@@ -707,8 +723,9 @@ async function loadMyRequests(){
 async function decideHrLeave(id,decision,actions){
  if(!currentUser||!canApproveRequests||!["approved","rejected"].includes(decision))return;
  if(!confirm("Confirm "+decision+" for this leave request?"))return;
- const buttons=actions.querySelectorAll("button");
+ const buttons=document.querySelectorAll("#hrLeaveList button");
  buttons.forEach(b=>b.disabled=true);
+ document.getElementById("hrLeaveStatus").textContent="Saving decision…";
  try{
   const {error}=await getClient().rpc("approval_review_leave",{p_request_id:id,p_approve:decision==="approved"});
   if(error)throw error;
@@ -777,11 +794,17 @@ async function decideHrAttendance(id,decision){
  if(!currentUser||!canApproveRequests||!["approved","rejected"].includes(decision))return;
  if(!confirm("Confirm "+decision+" for this attendance request?"))return;
  const msg=document.getElementById("hrAttendanceStatus");
+ const buttons=[...document.querySelectorAll("#hrAttendanceList button")];
+ buttons.forEach(button=>button.disabled=true);
+ msg.textContent="Saving decision…";
  try{
   const {error}=await getClient().rpc("review_attendance_request",{p_request_id:id,p_approve:decision==="approved"});
   if(error)throw error;
   await loadHrAttendanceRequests();
- }catch(e){msg.textContent="Decision failed: "+e.message;}
+ }catch(e){
+  msg.textContent="Decision failed: "+e.message;
+  buttons.forEach(button=>button.disabled=false);
+ }
 }
 async function loadHrAttendanceRequests(){
  const msg=document.getElementById("hrAttendanceStatus"),list=document.getElementById("hrAttendanceList");
