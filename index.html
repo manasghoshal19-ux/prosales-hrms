@@ -344,9 +344,11 @@ document.getElementById("joiningSectionValue").textContent = joining;
  if(currentRole==="hr")loadPerformanceEmployees();
  if(canApproveRequests){loadHrLeaveRequests();loadHrAttendanceRequests();}
  if(currentRole==="viewer"){loadViewerDirectory();loadViewerAttendance();loadViewerLeaves();loadViewerPerformance();loadViewerSalary();}
- loadMyLeaves();
- loadMyAttendance();
- if(currentRole==="employee")loadMyRequests();
+ if(currentRole==="employee"){
+  loadMyLeaves();
+  loadMyAttendance();
+  loadMyRequests();
+ }
 }
 
 
