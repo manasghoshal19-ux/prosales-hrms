@@ -1,5 +1,9 @@
 -- Review and run in Supabase SQL Editor after checking the employees schema.
 -- Read-only viewer endpoints; never expose these through the anonymous role.
+-- Salary endpoint is limited to the authenticated viewer named Suprabhat Chakraborty.
+-- IMPORTANT: confirm his employee profile name exactly matches; use an immutable
+-- user ID for final authorization after verifying it in Supabase.
+-- SQL changes here do NOT apply until reviewed and run in Supabase.
 create or replace function public.prosales_viewer_people()
 returns table(id uuid, full_name text, employee_code text)
 language sql stable security definer set search_path = ''
@@ -18,7 +22,8 @@ as $$
  select e.full_name::text,e.employee_code::text,e.designation::text,e.gross_salary::numeric
  from public.employees e
  where e.role='employee'
- and exists(select 1 from public.employees me where me.id=auth.uid() and me.role='viewer')
+ and exists(select 1 from public.employees me where me.id=auth.uid() and me.role='viewer'
+   and me.full_name='Suprabhat Chakraborty')
  order by e.full_name
 $$;
 revoke all on function public.prosales_viewer_salary() from public, anon;
