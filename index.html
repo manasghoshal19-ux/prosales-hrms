@@ -196,7 +196,7 @@ nav button{font-size:13px}
 <div id="approvals" class="section">
 <div class="card">
 <h2>HR Approval Centre</h2>
-<p class="muted">Leave and attendance requests can be reviewed by authorized HR and ADM002 accounts. Decisions are recorded by secure server functions.</p><button type="button" onclick="loadHrLeaveRequests()">Refresh Leave Requests</button><p id="hrLeaveStatus" class="small muted"></p><div id="hrLeaveList"></div><hr><h2>Attendance Requests</h2><button type="button" onclick="loadHrAttendanceRequests()">Refresh Attendance Requests</button><p id="hrAttendanceStatus"></p><div id="hrAttendanceList"></div>
+<p class="muted">Leave and attendance requests can be reviewed by authorized HR and ADM002 accounts. Decisions are recorded by secure server functions.</p><button type="button" onclick="loadHrLeaveRequests()">Refresh Leave Requests</button><p id="hrLeaveStatus" class="small muted"></p><div id="hrLeaveList"></div><hr><h2>Late / Half-Day / Remote Attendance Requests</h2><label for="approvalTypeFilter">Request type</label><select id="approvalTypeFilter" onchange="loadHrAttendanceRequests()"><option value="">All requests</option><option value="late">Late Entry</option><option value="half_day">Half-Day</option><option value="remote">Remote Attendance</option></select><button type="button" onclick="loadHrAttendanceRequests()">Refresh Attendance Requests</button><p id="hrAttendanceStatus"></p><div id="hrAttendanceList"></div>
 </div>
 </div>
 </section>
@@ -494,6 +494,7 @@ function showSection(id){
  });
  const target=document.getElementById(id);
  if(target)target.classList.add("active");
+ if(id==="approvals"&&canApproveRequests){loadHrLeaveRequests();loadHrAttendanceRequests();}
 }
 
 async function logout(){
@@ -501,6 +502,7 @@ async function logout(){
   if(db)await db.auth.signOut();
  }finally{
   currentUser=null;
+  viewerPeople=new Map();performanceEmployeeNames={};
   currentRole="employee";
   canApproveRequests=false;
   document.getElementById("appPage").classList.add("hidden");
@@ -795,7 +797,9 @@ async function loadHrAttendanceRequests(){
  if(!msg||!list||!currentUser||!canApproveRequests)return;
  list.replaceChildren();msg.textContent="Loading…";
  try{
-  const {data,error}=await getClient().from("attendance_requests").select("id,employee_id,request_date,requested_status,reason,status,created_at").order("created_at",{ascending:false}).limit(100);
+  let query=getClient().from("attendance_requests").select("id,employee_id,request_date,requested_status,reason,status,created_at").order("created_at",{ascending:false}).limit(100);
+  const filter=document.getElementById("approvalTypeFilter").value;if(filter)query=query.eq("requested_status",filter);
+  const {data,error}=await query;
   if(error)throw error;
   const rows=data||[];msg.textContent=rows.length+" request(s) found.";
   const ids=[...new Set(rows.map(x=>x.employee_id).filter(Boolean))];
@@ -807,7 +811,7 @@ async function loadHrAttendanceRequests(){
   rows.forEach(x=>{
    const item=document.createElement("div");item.className="request-row";
    const p=document.createElement("p"),person=names.get(x.employee_id);
-   p.textContent=(person?.full_name||"Employee")+" ("+(person?.employee_code||x.employee_id)+") | "+x.request_date+" | "+x.requested_status+" | "+x.status;
+   p.textContent=(person?.full_name||"Employee")+" ("+(person?.employee_code||x.employee_id)+") | "+x.request_date+" | "+({late:"Late Entry",half_day:"Half-Day",remote:"Remote Attendance"}[x.requested_status]||x.requested_status)+" | "+x.status;
    const detail=document.createElement("p");detail.textContent="Reason: "+x.reason;
    item.append(p,detail);
    if(x.status==="pending"){
